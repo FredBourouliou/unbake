@@ -18,6 +18,11 @@ from skimage.morphology import skeletonize
 from .scene import Shape, render_frame
 
 MAX_WIDTH = 16.0
+# A real stroke, rendered with its fitted width and trim, covers its observed pixels nearly as
+# well as a one-pixel edge error allows: IoU / ((w - 1) / (w + 1)) is 0.81 or more for 289 of
+# 290 dev strokes and every stroke in the real animations, even thin ones. Rigid shapes mistaken
+# for strokes (a ring scaling in place, a thin arc inside a swept area) stay at 0.73 or less.
+MIN_FIT = 0.77
 
 
 def detect_strokes(labels: np.ndarray, colours: np.ndarray) -> tuple[list[Shape], np.ndarray]:
@@ -70,6 +75,9 @@ def detect_strokes(labels: np.ndarray, colours: np.ndarray) -> tuple[list[Shape]
                 continue
             colour = tuple(int(c) for c in colours[k - 1])
             shape = _best_cap(line, closed, width, raw, colour, on & region[None], (W, H))
+            iou = _mean_iou(shape, on & region[None], np.flatnonzero(~np.isnan(raw[:, 0])), (W, H))
+            if iou < MIN_FIT * (shape.width - 1) / (shape.width + 1):
+                continue
             shapes.append(shape)
             consumed |= on & region[None]
     return shapes, consumed
@@ -293,18 +301,24 @@ def _best_cap(line, closed, width, raw, colour, masks, size) -> Shape:
                 continue
             trim = _cap_trim(raw, frames, closed, (w / 2) / total if cap == "round" else 0.0)
             probe = Shape("stroke", (255, 255, 255), line, None, track, width=w, closed=closed, cap=cap, trim=trim)
-            ious = []
-            for t in sample:
-                drawn = render_frame([probe], int(t), size, (0, 0, 0)).max(axis=2) > 127
-                obs = masks[t]
-                u = np.count_nonzero(drawn | obs)
-                if u:
-                    ious.append(np.count_nonzero(drawn & obs) / u)
-            iou = float(np.mean(ious)) if ious else 0.0
+            iou = _mean_iou(probe, masks, sample, size)
             if iou > best_iou:
                 best_iou = iou
                 best = Shape("stroke", colour, line, None, track.copy(), width=w, closed=closed, cap=cap, trim=trim)
     return best
+
+
+def _mean_iou(shape: Shape, masks: np.ndarray, frames, size) -> float:
+    """Mean IoU, over the given frames, between the stroke's rendering and the observed pixels."""
+    white = Shape("stroke", (255, 255, 255), shape.outer, None, shape.track, width=shape.width,
+                  closed=shape.closed, cap=shape.cap, trim=shape.trim)
+    ious = []
+    for t in frames:
+        drawn = render_frame([white], int(t), size, (0, 0, 0)).max(axis=2) > 127
+        u = np.count_nonzero(drawn | masks[t])
+        if u:
+            ious.append(np.count_nonzero(drawn & masks[t]) / u)
+    return float(np.mean(ious)) if ious else 0.0
 
 
 def _cap_trim(raw, frames, closed, d):
