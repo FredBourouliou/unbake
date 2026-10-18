@@ -20,7 +20,9 @@ const state = {
 };
 
 // Worker --------------------------------------------------------------------------------
-const worker = new Worker('worker.js', { type: 'module' });
+// Bump on each release so browsers fetch the new worker and Python files instead of cached ones.
+const VERSION = '0.3.0';
+const worker = new Worker(`worker.js?v=${VERSION}`, { type: 'module' });
 let workerReady = false;
 let pending = null;
 worker.onmessage = ({ data }) => {
@@ -68,7 +70,7 @@ function onScene(scene, frames) {
   $('scrub').max = scene.frames - 1;
   workspace.dataset.state = 'ready';
   ['export-lottie', 'export-svg', 'new'].forEach(id => $(id).disabled = false);
-  const keys = scene.objects.reduce((n, o) => n + (o.kind === 'stroke' ? o.start.length + o.len.length : o.pos.length + o.rot.length + o.scale.length), 0);
+  const keys = scene.objects.reduce((n, o) => n + keyCount(o), 0);
   setStatus(`${scene.objects.length} objects, ${keys} keyframes, reconstructed in ${scene.seconds} s on this machine.`);
   renderList();
   renderInspector();
@@ -77,22 +79,54 @@ function onScene(scene, frames) {
 
 const scale = () => unbaked.width / state.scene.width;
 
-function lerpKeys(keys, f, dims) {
-  if (f <= keys[0][0]) return keys[0].slice(1);
-  const last = keys[keys.length - 1];
-  if (f >= last[0]) return last.slice(1);
-  for (let i = 1; i < keys.length; i++) {
-    if (f <= keys[i][0]) {
-      const a = keys[i - 1], b = keys[i], t = (f - a[0]) / (b[0] - a[0]);
-      return Array.from({ length: dims }, (_, d) => a[d + 1] + (b[d + 1] - a[d + 1]) * t);
-    }
-  }
+// Eased keyframes: [frame, value, [x1, y1, x2, y2]] where the control points describe the
+// cubic-Bézier easing to the next key (as in CSS, After Effects and Lottie).
+function bezierPoint(c, s) {
+  const m = 1 - s;
+  return [3 * m * m * s * c[0] + 3 * m * s * s * c[2] + s ** 3, 3 * m * m * s * c[1] + 3 * m * s * s * c[3] + s ** 3];
 }
+function solveS(c, u) {  // x(s) = u; x is monotonic because control points stay in the unit square
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 30; i++) { const mid = (lo + hi) / 2; if (bezierPoint(c, mid)[0] < u) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
+}
+function sampleKeys(keys, f) {
+  if (keys.length === 1 || f <= keys[0][0]) return keys[0][1];
+  const last = keys[keys.length - 1];
+  if (f >= last[0]) return last[1];
+  let i = 1; while (keys[i][0] < f) i++;
+  const [fa, va, c] = keys[i - 1], [fb, vb] = keys[i];
+  const u = (f - fa) / (fb - fa);
+  return va + (vb - va) * bezierPoint(c, solveS(c, u))[1];
+}
+// Insert a key at frame f without changing the motion: split the easing curve there (de Casteljau).
+function ensureKey(keys, f) {
+  const at = keys.findIndex(k => k[0] === f);
+  if (at >= 0) return at;
+  let i = keys.findIndex(k => k[0] > f);
+  if (i <= 0) { keys.splice(i < 0 ? keys.length : 0, 0, [f, sampleKeys(keys, f), [1 / 3, 1 / 3, 2 / 3, 2 / 3]]); return keys.findIndex(k => k[0] === f); }
+  const [fa, va, c] = keys[i - 1], vb = keys[i][1];
+  const s = solveS(c, (f - fa) / (keys[i][0] - fa));
+  const lerp = (p, q, t) => [p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t];
+  const P0 = [0, 0], P1 = [c[0], c[1]], P2 = [c[2], c[3]], P3 = [1, 1];
+  const A = lerp(P0, P1, s), B = lerp(P1, P2, s), C = lerp(P2, P3, s), D = lerp(A, B, s), E = lerp(B, C, s), M = lerp(D, E, s);
+  const norm = (p, o, w) => [(p[0] - o[0]) / (w[0] || 1), (p[1] - o[1]) / (w[1] || 1)];
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  const left = [...norm(A, P0, M), ...norm(D, P0, M)].map(clamp);
+  const right = [...norm(E, M, [1 - M[0], 1 - M[1]]), ...norm(C, M, [1 - M[0], 1 - M[1]])].map(clamp);
+  keys[i - 1] = [fa, va, left];
+  keys.splice(i, 0, [f, va + (vb - va) * M[1], right]);
+  return i;
+}
+const keyCount = (o) => o.kind === 'stroke'
+  ? o.start.length + (o.closed ? o.len.length : o.end.length)
+  : o.x.length + o.y.length + o.rot.length + o.scale.length;
+const positionFrames = (o) => [...new Set([...o.x.map(k => k[0]), ...o.y.map(k => k[0])])].sort((a, b) => a - b);
 
 function trimAt(o, f) {
   if (o.hidden || f < o.span[0] || f > o.span[1]) return null;
-  const [start] = lerpKeys(o.start, f, 1);
-  const [len] = lerpKeys(o.len, f, 1);
+  const start = sampleKeys(o.start, f);
+  const len = o.closed ? sampleKeys(o.len, f) : Math.max(0, sampleKeys(o.end, f) - start);
   return { start, len };
 }
 
@@ -133,9 +167,8 @@ function drawStroke(o, f, ctx) {
 
 function params(o, f) {
   if (o.hidden || f < o.span[0] || f > o.span[1]) return null;
-  const [x, y] = lerpKeys(o.pos, f, 2);
-  const [r] = lerpKeys(o.rot, f, 1);
-  const [s] = lerpKeys(o.scale, f, 1);
+  const x = sampleKeys(o.x, f), y = sampleKeys(o.y, f);
+  const r = sampleKeys(o.rot, f), s = sampleKeys(o.scale, f);
   return { x, y, r, s };
 }
 
@@ -194,7 +227,7 @@ function drawSelection(o, f) {
   // Motion path over the visible span.
   uctx.beginPath();
   for (let t = o.span[0]; t <= o.span[1]; t++) {
-    const [x, y] = lerpKeys(o.pos, t, 2);
+    const x = sampleKeys(o.x, t), y = sampleKeys(o.y, t);
     t === o.span[0] ? uctx.moveTo(x * S, y * S) : uctx.lineTo(x * S, y * S);
   }
   uctx.strokeStyle = accent; uctx.globalAlpha = 0.7; uctx.lineWidth = 1.5; uctx.setLineDash([4, 4]); uctx.stroke();
@@ -203,7 +236,8 @@ function drawSelection(o, f) {
   const p = params(o, f);
   if (p) { uctx.lineWidth = 2; uctx.stroke(objectPath(o, p)); }
   // Keyframe handles.
-  for (const [kf, x, y] of o.pos) {
+  for (const kf of positionFrames(o)) {
+    const x = sampleKeys(o.x, kf), y = sampleKeys(o.y, kf);
     uctx.beginPath(); uctx.arc(x * S, y * S, HANDLE_R, 0, Math.PI * 2);
     uctx.fillStyle = kf === f ? accent : '#1d1b19'; uctx.fill();
     uctx.strokeStyle = accent; uctx.lineWidth = 2; uctx.stroke();
@@ -222,7 +256,7 @@ function renderList() {
     const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = o.color;
     const name = document.createElement('span'); name.textContent = `${o.kind === 'stroke' ? 'Stroke' : 'Object'} ${o.id + 1}`;
     const meta = document.createElement('span'); meta.className = 'mono';
-    meta.textContent = `${o.kind === 'stroke' ? o.start.length + o.len.length : o.pos.length} keys`;
+    meta.textContent = `${keyCount(o)} keys`;
     b.append(sw, name, meta);
     b.onclick = () => select(o.id === state.selected ? null : o.id);
     li.append(b); ul.append(li);
@@ -242,8 +276,8 @@ function renderInspector() {
   if (o.kind === 'stroke') { $('width').value = o.width; $('width-out').textContent = o.width.toFixed(1); }
   const facts = o.kind === 'stroke'
     ? [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['path', o.closed ? 'closed loop' : 'open'],
-       ['caps', o.cap], ['start keys', o.start.length], ['length keys', o.len.length], ['colour', o.color]]
-    : [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['position keys', o.pos.length],
+       ['caps', o.cap], ['start keys', o.start.length], [o.closed ? 'length keys' : 'end keys', (o.closed ? o.len : o.end).length], ['colour', o.color]]
+    : [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['position keys', positionFrames(o).length],
        ['rotation keys', o.rot.length], ['scale keys', o.scale.length], ['colour', o.color]];
   $('facts').replaceChildren();
   for (const [k, v] of facts) {
@@ -294,8 +328,9 @@ function hit(pt) {
   const S = scale(), sel = selectedObject();
   if (sel && sel.kind !== 'stroke') {
     // The handle of the current frame sits under the object itself: grabbing there moves the object.
-    const k = sel.pos.findIndex(([f, x, y]) => f !== state.frame && Math.hypot(x * S - pt.x, y * S - pt.y) <= HANDLE_R + 3);
-    if (k >= 0) return { kind: 'key', obj: sel, k };
+    const f = positionFrames(sel).find(kf => kf !== state.frame &&
+      Math.hypot(sampleKeys(sel.x, kf) * S - pt.x, sampleKeys(sel.y, kf) * S - pt.y) <= HANDLE_R + 3);
+    if (f !== undefined) return { kind: 'key', obj: sel, frame: f };
   }
   const objs = [...state.scene.objects].reverse();
   for (const o of objs) {
@@ -319,7 +354,9 @@ unbaked.addEventListener('pointerdown', (e) => {
   if (!h) { select(null); return; }
   if (h.obj.id !== state.selected) select(h.obj.id);
   remember();
-  state.drag = { ...h, start: pt, keys: structuredClone(h.obj.kind === 'stroke' ? h.obj.line : h.obj.pos) };
+  if (h.kind === 'key') { ensureKey(h.obj.x, h.frame); ensureKey(h.obj.y, h.frame); }
+  const snapshot = h.obj.kind === 'stroke' ? h.obj.line : { x: h.obj.x, y: h.obj.y };
+  state.drag = { ...h, start: pt, keys: structuredClone(snapshot) };
   unbaked.setPointerCapture(e.pointerId);
   unbaked.classList.add('is-dragging');
 });
@@ -332,17 +369,19 @@ unbaked.addEventListener('pointermove', (e) => {
   if (o.kind === 'stroke') {
     o.line = state.drag.keys.map(([x, y]) => [+(x + dx).toFixed(2), +(y + dy).toFixed(2)]);
   } else if (state.drag.kind === 'key') {
-    const [f, x, y] = state.drag.keys[state.drag.k];
-    o.pos[state.drag.k] = [f, +(x + dx).toFixed(2), +(y + dy).toFixed(2)];
+    const f = state.drag.frame;
+    o.x = state.drag.keys.x.map(k => k[0] === f ? [f, +(k[1] + dx).toFixed(2), k[2]] : k);
+    o.y = state.drag.keys.y.map(k => k[0] === f ? [f, +(k[1] + dy).toFixed(2), k[2]] : k);
   } else {
-    o.pos = state.drag.keys.map(([f, x, y]) => [f, +(x + dx).toFixed(2), +(y + dy).toFixed(2)]);
+    o.x = state.drag.keys.x.map(([f, v, c]) => [f, +(v + dx).toFixed(2), c]);
+    o.y = state.drag.keys.y.map(([f, v, c]) => [f, +(v + dy).toFixed(2), c]);
   }
   draw();
 });
 unbaked.addEventListener('pointerup', () => {
   if (!state.drag) return;
   const o = state.drag.obj;
-  const moved = JSON.stringify(state.drag.keys) !== JSON.stringify(o.kind === 'stroke' ? o.line : o.pos);
+  const moved = JSON.stringify(state.drag.keys) !== JSON.stringify(o.kind === 'stroke' ? o.line : { x: o.x, y: o.y });
   if (!moved) state.undo.pop();
   $('undo').disabled = !state.undo.length;
   state.drag = null;

@@ -1,6 +1,6 @@
 [project]
 name = "unbake"
-version = "0.2.0"
+version = "0.3.0"
 description = "Turn a flat motion-graphics GIF back into editable objects, motion paths and animated strokes; export Lottie or animated SVG."
 readme = "README.md"
 authors = [

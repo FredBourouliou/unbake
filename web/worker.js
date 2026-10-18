@@ -1,7 +1,7 @@
 // Runs the Python reconstruction in the browser with Pyodide. Nothing leaves the machine.
 import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs';
 
-const MODULES = ['__init__.py', 'scene.py', 'reconstruct.py', 'strokes.py', 'export.py', 'web_api.py'];
+const MODULES = ['__init__.py', 'scene.py', 'easing.py', 'reconstruct.py', 'strokes.py', 'export.py', 'web_api.py'];
 let pyodide;
 
 async function init() {
@@ -11,7 +11,7 @@ async function init() {
   await pyodide.loadPackage(['numpy', 'scipy', 'opencv-python', 'pillow', 'scikit-image']);
   pyodide.FS.mkdirTree('/app/unbake');
   for (const name of MODULES) {
-    const src = await (await fetch(`py/unbake/${name}`)).text();
+    const src = await (await fetch(`py/unbake/${name}${self.location.search}`)).text();
     pyodide.FS.writeFile(`/app/unbake/${name}`, src);
   }
   await pyodide.runPythonAsync("import sys; sys.path.insert(0, '/app'); import unbake.web_api as api");

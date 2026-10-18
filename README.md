@@ -1,6 +1,6 @@
 # Unbake
 
-**Turn a flattened motion-graphics animation back into editable objects.** Drop a GIF: Unbake finds the shapes, their colours and their motion (position, rotation, scale, and lines that draw themselves), lets you select an object, drag its motion path or recolour it, and exports the result as Lottie JSON or animated SVG.
+**Turn a flattened motion-graphics animation back into editable objects.** Drop a GIF: Unbake finds the shapes, their colours and their motion (position, rotation, scale, and lines that draw themselves), turns it into eased keyframes like hand-made animation, lets you select an object, drag its motion path or recolour it, and exports the result as Lottie JSON or animated SVG.
 
 **[▶ Try it in your browser](https://fredbourouliou.github.io/unbake/)** — Python, OpenCV and SciPy run locally through WebAssembly; nothing is uploaded.
 
