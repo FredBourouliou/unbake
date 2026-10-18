@@ -4,7 +4,7 @@
 
 **[▶ Try it in your browser](https://fredbourouliou.github.io/unbake/)** — Python, OpenCV and SciPy run locally through WebAssembly; nothing is uploaded.
 
-![The editor: a bouncing ball reconstructed from a GIF, with its motion path and keyframes](docs/editor.png)
+![Demo: a GIF is unbaked into objects; the ball is selected, its whole motion path is dragged and it is recoloured](docs/demo.gif)
 
 ## What works, what doesn't (yet)
 

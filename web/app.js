@@ -293,7 +293,8 @@ function canvasPoint(e) {
 function hit(pt) {
   const S = scale(), sel = selectedObject();
   if (sel && sel.kind !== 'stroke') {
-    const k = sel.pos.findIndex(([, x, y]) => Math.hypot(x * S - pt.x, y * S - pt.y) <= HANDLE_R + 3);
+    // The handle of the current frame sits under the object itself: grabbing there moves the object.
+    const k = sel.pos.findIndex(([f, x, y]) => f !== state.frame && Math.hypot(x * S - pt.x, y * S - pt.y) <= HANDLE_R + 3);
     if (k >= 0) return { kind: 'key', obj: sel, k };
   }
   const objs = [...state.scene.objects].reverse();
