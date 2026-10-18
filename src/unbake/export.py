@@ -13,7 +13,7 @@ import numpy as np
 from .scene import Shape
 
 # Maximum deviation allowed when dropping a frame, per channel.
-TOLERANCE = {"x": 0.35, "y": 0.35, "rot": 0.8, "scale": 0.006}
+TOLERANCE = {"x": 0.35, "y": 0.35, "rot": 1.5, "scale": 0.015}
 
 
 def _rdp(t: np.ndarray, v: np.ndarray, tol: float) -> list[int]:

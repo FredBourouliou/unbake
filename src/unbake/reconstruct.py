@@ -266,8 +266,29 @@ def fit_track(track: Track, labels: np.ndarray, colours: np.ndarray) -> FittedOb
             best = _refine(points, best, labels[t], k)
             params[t] = best
             prev = best
+    if _round(points):
+        # A disc or ring has no visible orientation: keep its rotation constant.
+        for t in params:
+            params[t][2] = 0.0
     colour = tuple(int(c) for c in colours[k - 1])
     return FittedObject(k, colour, ref, points, params)
+
+
+def _round(points: np.ndarray) -> bool:
+    """True when the template looks the same after any rotation (disc, ring)."""
+    lo = np.floor(points.min(0)).astype(int) - 2
+    size = np.ceil(points.max(0)).astype(int) - lo + 3
+    grid = np.zeros((size[1], size[0]), bool)
+    ij = np.floor(points - lo).astype(int)
+    grid[ij[:, 1], ij[:, 0]] = True
+    for angle in (37.0, 61.0):
+        c, s = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+        q = np.floor(points @ np.array([[c, s], [-s, c]]) - lo).astype(int)
+        inside = (q[:, 0] >= 0) & (q[:, 0] < size[0]) & (q[:, 1] >= 0) & (q[:, 1] < size[1])
+        overlap = grid[q[inside, 1], q[inside, 0]].mean() if inside.any() else 0.0
+        if overlap < 0.93:
+            return False
+    return True
 
 
 def _refine(points, p, lab, k):
@@ -303,6 +324,8 @@ def vectorise(obj: FittedObject) -> tuple[np.ndarray, np.ndarray | None]:
     for x, y in (pts - lo - 0.5):
         mask[int(round(y * up)):int(round(y * up)) + up, int(round(x * up)):int(round(x * up)) + up] = 255
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((up + 1, up + 1), np.uint8))
+    # Smooth the pixel staircase before tracing, so curves come out as curves.
+    mask = (cv2.GaussianBlur(mask, (0, 0), up * 0.9) > 127).astype(np.uint8) * 255
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
     if not contours:
         return np.zeros((3, 2)), None
@@ -317,7 +340,7 @@ def vectorise(obj: FittedObject) -> tuple[np.ndarray, np.ndarray | None]:
 
 
 def _simplify(contour, up, lo, grow=0.0):
-    approx = cv2.approxPolyDP(contour, 0.6 * up, True).reshape(-1, 2).astype(float)
+    approx = cv2.approxPolyDP(contour, 0.3 * up, True).reshape(-1, 2).astype(float)
     poly = approx / up + lo
     return _grow(poly, grow)
 

@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Unbake — turn an animation back into editable objects</title>
+  <meta name="description" content="Drop a GIF of a motion-graphics animation and get its objects and motion back: select, drag the motion path, recolour, export to Lottie or animated SVG. Runs entirely in your browser.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Schibsted+Grotesk:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23221f1c'/%3E%3Ccircle cx='12' cy='16' r='6' fill='%23e8573a'/%3E%3Crect x='17' y='9' width='9' height='14' rx='1' fill='%23efe9e1'/%3E%3C/svg%3E">
+</head>
+<body>
+  <header class="bar">
+    <div class="brand">
+      <span class="brand__mark">Unbake</span>
+      <span class="brand__tag">Turn an animation back into editable objects.</span>
+    </div>
+    <nav class="bar__links">
+      <a href="#how">How it works</a>
+      <a href="https://github.com/FredBourouliou/unbake">Source</a>
+    </nav>
+  </header>
+
+  <main class="workspace" id="workspace" data-state="empty">
+    <section class="stage" aria-label="Animation">
+      <!-- Empty state -->
+      <div class="drop" id="drop">
+        <input type="file" id="file" accept="image/gif" hidden>
+        <p class="drop__title">Drop a GIF here</p>
+        <p class="drop__hint">Flat 2D motion graphics: shapes on a plain background. <button class="link" id="pick">Choose a file</button></p>
+        <div class="samples" role="list" aria-label="Samples">
+          <button class="sample" data-src="samples/bounce.gif" role="listitem"><img src="samples/bounce.gif" alt="Sample: a bouncing ball, a spinning star, a pulsing ring"></button>
+          <button class="sample" data-src="samples/orbit.gif" role="listitem"><img src="samples/orbit.gif" alt="Sample: a square orbiting, a triangle crossing"></button>
+          <button class="sample" data-src="samples/assemble.gif" role="listitem"><img src="samples/assemble.gif" alt="Sample: three shapes assembling into a logo"></button>
+        </div>
+        <p class="drop__note">Runs on your machine: Python and OpenCV compiled to WebAssembly. Nothing is uploaded.</p>
+      </div>
+
+      <!-- Working state -->
+      <div class="panes" id="panes">
+        <figure class="pane">
+          <figcaption>Baked <span class="dim">the pixels you dropped</span></figcaption>
+          <canvas id="baked" width="256" height="256"></canvas>
+        </figure>
+        <figure class="pane pane--edit">
+          <figcaption>Unbaked <span class="dim">click an object, drag its path</span></figcaption>
+          <canvas id="unbaked" width="880" height="880" tabindex="0" aria-label="Editable reconstruction"></canvas>
+        </figure>
+      </div>
+
+      <div class="transport" id="transport">
+        <button class="icon-btn" id="play" aria-label="Play">
+          <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path id="play-icon" d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg>
+        </button>
+        <input type="range" id="scrub" min="0" max="0" value="0" aria-label="Frame">
+        <output id="frame-out" class="mono">0 / 0</output>
+      </div>
+
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <aside class="side" aria-label="Objects and export">
+      <section class="side__block">
+        <h2>Objects</h2>
+        <ul class="objects" id="objects"></ul>
+      </section>
+
+      <section class="side__block" id="inspector" hidden>
+        <h2>Selected</h2>
+        <label class="field">
+          <span>Colour</span>
+          <input type="color" id="color">
+        </label>
+        <dl class="facts mono" id="facts"></dl>
+        <div class="row">
+          <button class="btn" id="toggle-visible">Hide</button>
+          <button class="btn" id="reset">Reset</button>
+        </div>
+        <p class="hint">Drag a handle to move a keyframe. Drag the object to move its whole path.</p>
+      </section>
+
+      <section class="side__block">
+        <h2>Export</h2>
+        <div class="row">
+          <button class="btn btn--primary" id="export-lottie" disabled>Lottie JSON</button>
+          <button class="btn" id="export-svg" disabled>Animated SVG</button>
+        </div>
+        <div class="row">
+          <button class="btn btn--quiet" id="undo" disabled>Undo <kbd>⌘Z</kbd></button>
+          <button class="btn btn--quiet" id="new">New GIF</button>
+        </div>
+      </section>
+    </aside>
+  </main>
+
+  <section class="about" id="how">
+    <h2>How it works</h2>
+    <ol>
+      <li><strong>Palette.</strong> Find the background and the dominant colours; label every pixel, ignoring dithering and antialiasing blends.</li>
+      <li><strong>Objects.</strong> Connected regions per colour, linked across frames, with pieces cut by an occluder joined back together.</li>
+      <li><strong>Motion.</strong> Each object's clearest view becomes a template, fitted on every frame for position, rotation and scale; pixels hidden by another object are not counted against it.</li>
+      <li><strong>Keyframes.</strong> Per-frame values are reduced to keyframes (Ramer–Douglas–Peucker), which is what you edit and what the exports play.</li>
+    </ol>
+    <p>On a synthetic benchmark with known sources (3–5 overlapping shapes, dithered GIFs), objects keep their identity on 98.6 % of frames, positions are within 0.14 px and rotations within 0.5° (median). Near-identical colours are still out of reach. <a href="https://github.com/FredBourouliou/unbake">Method and numbers</a>.</p>
+  </section>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

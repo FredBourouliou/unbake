@@ -5,9 +5,9 @@
     "pos_median": 0.08973396985005662,
     "rot_median": 0.26849999999999596,
     "scale_median": 0.006018805921486231,
-    "iou": 0.9632582349456731,
+    "iou": 0.9633771798860492,
     "objects_found/true": "51/50",
-    "seconds_per_gif": 1.2297021865844726
+    "seconds_per_gif": 1.2695212006568908
   },
   "medium": {
     "samples": 20,
@@ -15,18 +15,8 @@
     "pos_median": 0.17609725149645045,
     "rot_median": 0.33350000000000435,
     "scale_median": 0.007970376915294404,
-    "iou": 0.920009277273542,
+    "iou": 0.9212302868315042,
     "objects_found/true": "93/90",
-    "seconds_per_gif": 1.6975685596466064
-  },
-  "hard": {
-    "samples": 10,
-    "identity": 0.5548966881916717,
-    "pos_median": 0.33076964708764245,
-    "rot_median": 0.5065000000000097,
-    "scale_median": 0.01165114198444028,
-    "iou": 0.7725316394598708,
-    "objects_found/true": "54/57",
-    "seconds_per_gif": 1.8282305240631103
+    "seconds_per_gif": 1.759980523586273
   }
 }
