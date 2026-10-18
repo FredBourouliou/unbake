@@ -92,8 +92,9 @@ a:hover { text-decoration-color: var(--accent); }
 #unbaked.is-hover { cursor: grab; }
 #unbaked.is-dragging { cursor: grabbing; }
 
-.transport { display: flex; align-items: center; gap: var(--s3); width: min(904px, 100%); }
-.transport input[type=range] { flex: 1; accent-color: var(--accent); }
+/* Transport and timeline share one grid, so keyframe diamonds line up with the scrubber. */
+.transport, .tl-row { display: grid; grid-template-columns: 80px 1fr 7ch; align-items: center; gap: var(--s3); width: min(904px, 100%); }
+.transport input[type=range] { width: 100%; margin: 0; accent-color: var(--accent); }
 .icon-btn {
   width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%;
   border: 1px solid var(--line); background: var(--raised); color: var(--text); cursor: pointer;
@@ -101,12 +102,34 @@ a:hover { text-decoration-color: var(--accent); }
 .icon-btn:hover { border-color: var(--text-dim); }
 #frame-out { min-width: 7ch; text-align: right; color: var(--text-dim); }
 
+.timeline[hidden] { display: none; }
+.timeline { display: grid; gap: var(--s1); width: min(904px, 100%); margin-top: calc(-1 * var(--s2)); }
+.tl-label { font-size: 0.8125rem; color: var(--text-dim); }
+.tl-count { font-size: 0.75rem; text-align: right; color: var(--text-dim); }
+/* --thumb: half the range thumb, so frame 0 and the last frame sit where the scrubber puts them. */
+.tl-track { --thumb: 8px; position: relative; height: 26px; border-radius: 4px; background: var(--panel); cursor: copy; }
+.tl-span, .tl-head, .tl-key { position: absolute; left: calc(var(--thumb) + (100% - 2 * var(--thumb)) * var(--at)); }
+.tl-span { top: 0; bottom: 0; width: calc((100% - 2 * var(--thumb)) * var(--len)); background: var(--raised); border-radius: 2px; }
+.tl-head { top: -2px; bottom: -2px; width: 1px; background: var(--accent); pointer-events: none; }
+.tl-key {
+  top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; padding: 0;
+  transform: rotate(45deg); border: 1.5px solid var(--text-dim); border-radius: 2px;
+  background: var(--bg); cursor: ew-resize; touch-action: none;
+  transition: transform 120ms var(--ease), border-color 120ms var(--ease);
+}
+.tl-key:hover { border-color: var(--text); transform: rotate(45deg) scale(1.2); }
+.tl-key.is-now { background: var(--accent); border-color: var(--accent); }
+.tl-key[aria-pressed="true"] { border-color: var(--text); box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text); }
+.tl-key:focus-visible { outline-offset: 3px; }
+.timeline.is-dragging, .timeline.is-dragging * { cursor: ew-resize; }
+
 .status { margin: 0; min-height: 1.5em; color: var(--text-dim); font-size: 0.875rem; }
 
 .workspace[data-state="empty"] .panes,
 .workspace[data-state="empty"] .transport,
 .workspace[data-state="loading"] .panes,
-.workspace[data-state="loading"] .transport { display: none; }
+.workspace[data-state="loading"] .transport,
+.workspace:not([data-state="ready"]) .timeline { display: none; }
 .workspace[data-state="ready"] .drop { display: none; }
 .workspace[data-state="loading"] .drop { opacity: 0.5; pointer-events: none; }
 

@@ -14,6 +14,7 @@ const state = {
   frame: 0,
   playing: false,
   selected: null,
+  key: null,          // selected timeline key: { row, frame }
   undo: [],
   drag: null,
   hover: false,
@@ -21,7 +22,7 @@ const state = {
 
 // Worker --------------------------------------------------------------------------------
 // Bump on each release so browsers fetch the new worker and Python files instead of cached ones.
-const VERSION = '0.3.0';
+const VERSION = '0.3.1';
 const worker = new Worker(`worker.js?v=${VERSION}`, { type: 'module' });
 let workerReady = false;
 let pending = null;
@@ -65,6 +66,7 @@ function onScene(scene, frames) {
   state.imageData = [];
   state.frame = 0;
   state.selected = null;
+  state.key = null;
   state.undo = [];
   baked.width = scene.width; baked.height = scene.height;
   $('scrub').max = scene.frames - 1;
@@ -210,6 +212,7 @@ function draw() {
   }
   const sel = sc.objects.find(o => o.id === state.selected);
   if (sel) drawSelection(sel, f);
+  updateTimeline();
   $('scrub').value = f;
   $('frame-out').textContent = `${String(f + 1).padStart(String(sc.frames).length, '0')} / ${sc.frames}`;
 }
@@ -266,6 +269,7 @@ function renderList() {
 function renderInspector() {
   const o = selectedObject();
   $('inspector').hidden = !o;
+  renderTimeline();
   if (!o) return;
   $('color').value = o.color;
   $('toggle-visible').textContent = o.hidden ? 'Show' : 'Hide';
@@ -273,6 +277,7 @@ function renderInspector() {
   $('hint').textContent = o.kind === 'stroke'
     ? 'An animated stroke: it draws itself along this path. Drag it to move it, change its colour or width.'
     : 'Drag a handle to move a keyframe. Drag the object to move it, with its whole path.';
+  $('hint').textContent += ' On the timeline, drag a key to retime it, double-click to add one, Delete to remove it.';
   if (o.kind === 'stroke') { $('width').value = o.width; $('width-out').textContent = o.width.toFixed(1); }
   const facts = o.kind === 'stroke'
     ? [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['path', o.closed ? 'closed loop' : 'open'],
@@ -288,7 +293,7 @@ function renderInspector() {
 }
 
 const selectedObject = () => state.scene?.objects.find(o => o.id === state.selected);
-function select(id) { state.selected = id; renderList(); renderInspector(); draw(); }
+function select(id) { state.selected = id; state.key = null; renderList(); renderInspector(); draw(); }
 
 function remember() {
   state.undo.push(structuredClone(state.scene.objects));
@@ -298,6 +303,7 @@ function remember() {
 function undo() {
   if (!state.undo.length) return;
   state.scene.objects = state.undo.pop();
+  state.key = null;
   $('undo').disabled = !state.undo.length;
   renderList(); renderInspector(); draw();
 }
@@ -317,6 +323,125 @@ $('reset').onclick = () => {
 };
 $('undo').onclick = undo;
 $('new').onclick = () => { stop(); state.scene = null; workspace.dataset.state = 'empty'; $('objects').replaceChildren(); $('inspector').hidden = true; ['export-lottie', 'export-svg', 'undo', 'new'].forEach(id => $(id).disabled = true); setStatus(workerReady ? 'Ready. Drop a GIF or pick a sample.' : ''); };
+
+// Timeline --------------------------------------------------------------------------------
+// One row per channel of the selected object; each key is a diamond that can be retimed.
+// Position joins the x and y channels: a key there moves both, as in After Effects.
+function timelineRows(o) {
+  if (o.kind === 'stroke') return [{ name: 'Start', chans: [o.start] }, { name: o.closed ? 'Length' : 'End', chans: [o.closed ? o.len : o.end] }];
+  return [{ name: 'Position', chans: [o.x, o.y] }, { name: 'Rotation', chans: [o.rot] }, { name: 'Scale', chans: [o.scale] }];
+}
+const rowFrames = (row) => [...new Set(row.chans.flatMap(c => c.map(k => k[0])))].sort((a, b) => a - b);
+const at = (f) => String(state.scene.frames > 1 ? f / (state.scene.frames - 1) : 0);
+
+function renderTimeline() {
+  const tl = $('timeline'), o = selectedObject();
+  tl.hidden = !o;
+  tl.replaceChildren();
+  if (!o) return;
+  timelineRows(o).forEach((row, r) => {
+    const frames = rowFrames(row);
+    const el = document.createElement('div'); el.className = 'tl-row';
+    const label = document.createElement('span'); label.className = 'tl-label'; label.textContent = row.name;
+    const track = document.createElement('div'); track.className = 'tl-track';
+    track.title = 'Double-click to add a key';
+    const span = document.createElement('span'); span.className = 'tl-span';
+    span.style.setProperty('--at', at(o.span[0])); span.style.setProperty('--len', at(o.span[1] - o.span[0]));
+    const head = document.createElement('span'); head.className = 'tl-head';
+    track.append(span, head);
+    for (const f of frames) {
+      const k = document.createElement('button'); k.className = 'tl-key';
+      k.dataset.row = r; k.dataset.frame = f;
+      k.style.setProperty('--at', at(f));
+      k.setAttribute('aria-label', `${row.name} key, frame ${f + 1}`);
+      k.addEventListener('pointerdown', (e) => keyDown(e, r, f));
+      track.append(k);
+    }
+    track.addEventListener('dblclick', (e) => { if (!e.target.classList.contains('tl-key')) addKey(r, frameAt(track, e.clientX)); });
+    const count = document.createElement('span'); count.className = 'tl-count mono'; count.textContent = frames.length;
+    el.append(label, track, count);
+    tl.append(el);
+  });
+  updateTimeline();
+}
+
+// Cheap per-frame refresh: playhead, current and selected keys (no rebuild, so drags survive).
+function updateTimeline() {
+  const tl = $('timeline'); if (tl.hidden) return;
+  tl.querySelectorAll('.tl-head').forEach(h => h.style.setProperty('--at', at(state.frame)));
+  tl.querySelectorAll('.tl-key').forEach(k => {
+    const f = +k.dataset.frame;
+    k.classList.toggle('is-now', f === state.frame);
+    k.setAttribute('aria-pressed', String(state.key?.row === +k.dataset.row && state.key?.frame === f));
+  });
+}
+
+function frameAt(track, clientX) {
+  const r = track.getBoundingClientRect(), pad = 8;
+  const u = (clientX - r.left - pad) / Math.max(1, r.width - 2 * pad);
+  return Math.round(Math.min(1, Math.max(0, u)) * (state.scene.frames - 1));
+}
+
+function keyDown(e, r, f) {
+  e.preventDefault(); e.stopPropagation();
+  stop();
+  const o = selectedObject(), row = timelineRows(o)[r], frames = rowFrames(row), i = frames.indexOf(f);
+  // A key cannot pass its neighbours, so the order of keys (and their easings) never changes.
+  const lo = i > 0 ? frames[i - 1] + 1 : 0, hi = i < frames.length - 1 ? frames[i + 1] - 1 : state.scene.frames - 1;
+  state.key = { row: r, frame: f };
+  state.frame = f;
+  remember();
+  const key = e.currentTarget, track = key.parentElement;
+  key.setPointerCapture(e.pointerId);
+  $('timeline').classList.add('is-dragging');
+  let now = f;
+  const move = (ev) => {
+    const g = Math.min(hi, Math.max(lo, frameAt(track, ev.clientX)));
+    if (g === now) return;
+    for (const c of row.chans) { const k = c.find(k => k[0] === now); if (k) k[0] = g; }
+    now = g;
+    key.dataset.frame = g; key.style.setProperty('--at', at(g));
+    key.setAttribute('aria-label', `${row.name} key, frame ${g + 1}`);
+    state.key.frame = g; state.frame = g;
+    draw();
+  };
+  const up = () => {
+    key.removeEventListener('pointermove', move);
+    key.removeEventListener('pointerup', up);
+    key.removeEventListener('pointercancel', up);
+    $('timeline').classList.remove('is-dragging');
+    if (now === f) { state.undo.pop(); $('undo').disabled = !state.undo.length; }
+    renderInspector();
+    key.isConnected || $('timeline').querySelector(`.tl-key[data-row="${r}"][data-frame="${now}"]`)?.focus();
+  };
+  key.addEventListener('pointermove', move);
+  key.addEventListener('pointerup', up);
+  key.addEventListener('pointercancel', up);
+  draw();
+}
+
+// Add a key without changing the motion: the easing curve is split there.
+function addKey(r, f) {
+  const o = selectedObject(), row = timelineRows(o)[r];
+  stop();
+  if (row.chans.every(c => c.some(k => k[0] === f))) { state.key = { row: r, frame: f }; state.frame = f; draw(); return; }
+  remember();
+  for (const c of row.chans) ensureKey(c, f);
+  state.key = { row: r, frame: f }; state.frame = f;
+  renderList(); renderInspector(); draw();
+}
+
+// Remove the selected key; the previous key keeps its easing, now running to the next one.
+function deleteKey() {
+  const o = selectedObject(); if (!o || !state.key) return;
+  const row = timelineRows(o)[state.key.row], f = state.key.frame;
+  const removable = row.chans.filter(c => c.length > 1 && c.some(k => k[0] === f));
+  if (!removable.length) { setStatus('A channel keeps at least one key.'); return; }
+  remember();
+  for (const c of removable) c.splice(c.findIndex(k => k[0] === f), 1);
+  state.key = null;
+  renderList(); renderInspector(); draw();
+}
 
 // Canvas interaction ----------------------------------------------------------------------
 function canvasPoint(e) {
@@ -383,6 +508,7 @@ unbaked.addEventListener('pointerup', () => {
   const o = state.drag.obj;
   const moved = JSON.stringify(state.drag.keys) !== JSON.stringify(o.kind === 'stroke' ? o.line : { x: o.x, y: o.y });
   if (!moved) state.undo.pop();
+  else { renderList(); renderInspector(); }  // a handle drag may have added keys
   $('undo').disabled = !state.undo.length;
   state.drag = null;
   unbaked.classList.remove('is-dragging');
@@ -406,6 +532,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === ' ' && !e.target.matches('button')) { e.preventDefault(); state.playing ? stop() : play(); }
   else if (e.key === 'ArrowRight') { stop(); state.frame = Math.min(state.scene.frames - 1, state.frame + 1); draw(); }
   else if (e.key === 'ArrowLeft') { stop(); state.frame = Math.max(0, state.frame - 1); draw(); }
+  else if ((e.key === 'Delete' || e.key === 'Backspace') && state.key) { e.preventDefault(); deleteKey(); }
   else if (e.key === 'Escape') select(null);
 });
 
