@@ -99,6 +99,19 @@ Measured on dev while developing, then once on a fresh holdout (seeds 30 000+: 2
 
 **Result on the fresh holdout (run once, commit `d379c72`): go.** Keyframes 6 602 → 2 825 (**43 %** of v0.2), Lottie region IoU 0.896 → 0.898 (no drop; slightly better). Dev set: 42 %, +0.002. The bouncing-ball sample goes from 137 to 54 keyframes in total; the ball's vertical motion from 47 keys to 10, one per bounce extreme.
 
+### v0.3.1: false strokes (criterion written before the fix)
+
+The one v0.2 criterion never met: a rigid shape occasionally comes back as a stroke. On a wider dev set (300 medium samples, seeds 0–299) it happens on **4/300**: a ring that scales in place, and three shapes whose swept area happens to contain a thin arc. Too rare to measure on 20 samples, so the check uses a larger fresh holdout: **seeds 40 000–40 199 for medium (200 samples) and 40 000–40 059 for strokes (60)**, never generated before, run once.
+
+| Metric | Go if |
+|---|---|
+| Medium samples with a false stroke | ≤ 1 % (at most 2 of 200) |
+| Ground-truth strokes recovered as strokes | ≥ 95 % |
+| Mean IoU of each stroke rendered alone | ≥ 0.80 |
+| Mean region IoU on the strokes level | ≥ 0.85 |
+
+Non-regression on the same 200 medium samples: the four v0.1 thresholds still hold. The 24 real animations are re-run and reported before/after.
+
 ### Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |
