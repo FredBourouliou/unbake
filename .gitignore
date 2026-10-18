@@ -2,3 +2,5 @@ data/
 results/*.png
 .venv/
 __pycache__/
+tools/lottie-render/node_modules/
+results/export/
