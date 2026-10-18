@@ -112,6 +112,10 @@ The one v0.2 criterion never met: a rigid shape occasionally comes back as a str
 
 Non-regression on the same 200 medium samples: the four v0.1 thresholds still hold. The 24 real animations are re-run and reported before/after.
 
+The fix: a candidate stroke, rendered with its fitted width and trim, must cover its own pixels nearly as well as a one-pixel edge error allows (IoU ≥ 0.77 × (w − 1)/(w + 1)). A first version with a plain IoU threshold rejected the thin real strokes of *colorline*; normalising by the width fixed that before the holdout was generated.
+
+**Result on the fresh holdout (run once, commit `6404f6e`): go.** Medium samples with a false stroke **0/200** (✓), strokes recovered 96.9 % of 127 (✓), mean stroke IoU 0.804 (✓, narrowly), region IoU 0.881 (✓). Non-regression on the 200 medium samples: identity 96.8 %, 0.15 px, 0.43°, IoU 0.935 (all ✓). Dev: 4/300 → 0/300. The 24 real animations come back exactly as before.
+
 ### v0.4: gradient fills (criterion written before the reconstruction code)
 
 A new corpus level, **gradients**: 2–4 overlapping shapes, about half of them (at least one per sample) filled with a two-colour linear gradient that moves and turns with the shape, dithered GIFs. Today such a shape comes back as two or three flat fragments: on 40 dev samples, **0 % of gradient shapes** are recovered as one gradient object, identity 85.6 %, mean foreground colour error 9.5 / 255 (`scripts/evaluate_gradients.py`).
