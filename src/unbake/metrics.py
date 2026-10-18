@@ -51,7 +51,7 @@ def score(rec: dict, truth_path: str) -> dict:
         obj = obj_by_shape[id(shapes[e])]
         observed = sorted(obj.params)
         ref = obj.ref_frame
-        sym = SYMMETRY[gt["kind"]]
+        sym = SYMMETRY.get(gt["kind"], 1)  # a morphing shape has no symmetry
         for t in observed:
             p = obj.params[t]
             pos_err.append(float(np.linalg.norm(p[:2] - track[t, :2])))

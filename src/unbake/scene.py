@@ -59,6 +59,8 @@ class Shape:
     trim: np.ndarray | None = None          # per frame (start, end) as path fractions; start > end wraps a closed path
     # Linear gradient fill, in local coordinates: (p0, p1, colour0, colour1). `color` is then its mean.
     gradient: tuple | None = None
+    # Morphing outline: one local polygon per frame (frames x points x 2), replacing `outer`.
+    morph: np.ndarray | None = None
 
 
 def holes(shape: "Shape") -> list[np.ndarray]:
@@ -120,7 +122,7 @@ def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
             _draw_stroke(draw, shape, frame, SUPERSAMPLE)
             canvas.paste(Image.new("RGB", canvas.size, shape.color), mask=mask)
             continue
-        outer = transform(shape.outer, x, y, rot, scale) * SUPERSAMPLE
+        outer = transform(shape.outer if shape.morph is None else shape.morph[frame], x, y, rot, scale) * SUPERSAMPLE
         draw.polygon([tuple(p) for p in outer], fill=255)
         for hole_poly in holes(shape):
             hole = transform(hole_poly, x, y, rot, scale) * SUPERSAMPLE

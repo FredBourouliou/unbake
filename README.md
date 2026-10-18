@@ -149,6 +149,19 @@ Why the colour criterion fails, measured after the fact: the threshold was set w
 
 Two more things to report. Four of the 60 holdout seeds could not be generated (four gradients need eight palette colours, the palette has seven); the evaluation ran on the 56 others, and the generator now drops extra gradients instead (existing samples unchanged). On the 24 real animations, *turbine*'s purple disc now comes back as one gradient instead of two flat pieces, which looks closer but lowers its per-colour region score (0.88 → 0.51, a metric that labels each pixel with the nearest flat colour); the others are unchanged.
 
+### v0.5: morphing shapes (criterion written before the reconstruction code)
+
+A new corpus level, **morph**: 1–3 shapes, at least one whose outline morphs between two primitives (circle, square, rect, triangle, star; blended point by point along rays from the centre) while it moves, dithered GIFs. Today a morphing shape comes back as a rigid template that scales: on 40 dev samples, **0 %** are recovered with an animated outline, and their mean per-frame IoU is **0.795** (`scripts/evaluate_morph.py`). For calibration, measured before setting the thresholds this time: rigid shapes reach a mean per-frame IoU of 0.91 on the same samples and on medium.
+
+| Metric (morph level) | Go if |
+|---|---|
+| Morphing shapes recovered as one object with an animated outline | ≥ 90 % |
+| Mean per-frame IoU of each morphing shape, rendered alone | ≥ 0.88 |
+| Identity, all shapes | ≥ 90 % |
+| Lottie export rendered by lottie-web vs the reconstruction's own render, foreground | ≤ 4 / 255 |
+
+Non-regression: medium samples given a morph by mistake ≤ 5 %, and the four v0.1 thresholds on medium still hold. Measured on dev while developing, then once on a fresh holdout (seeds 60 000+: 60 morph, 100 medium).
+
 ### Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |

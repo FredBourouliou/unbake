@@ -155,11 +155,73 @@ def make_gradient_sample(seed: int) -> dict:
             "shapes": shapes, "dither": True, "n_frames": n_frames}
 
 
+def radial_outline(kind: str, size: float, n: int = 64) -> np.ndarray:
+    """Outline sampled at n evenly spaced angles from the centre, starting at the top.
+
+    Two such outlines correspond point by point, so blending them is a natural morph.
+    """
+    poly, _ = outline(kind, size, 0.6)
+    out = []
+    for a in np.linspace(-math.pi / 2, 1.5 * math.pi, n, endpoint=False):
+        d = np.array([math.cos(a), math.sin(a)])
+        best = None
+        for p, q in zip(poly, np.roll(poly, -1, axis=0)):
+            # Ray from the origin along d against segment p-q.
+            m = np.array([d, p - q]).T
+            if abs(np.linalg.det(m)) < 1e-9:
+                continue
+            r, s = np.linalg.solve(m, p)
+            if r > 0 and 0 <= s <= 1 and (best is None or r < best):
+                best = r
+        out.append(d * best)
+    return np.array(out)
+
+
+def make_morph_sample(seed: int) -> dict:
+    """1-3 shapes, at least one morphing between two outlines while it moves, dithered."""
+    rng = np.random.default_rng(seed)
+    n_frames = int(rng.integers(36, 61))
+    background = (250, 248, 244) if rng.random() < 0.7 else (24, 26, 32)
+    used, shapes = set(), []
+
+    def colour():
+        c = next(PALETTE[i] for i in rng.permutation(len(PALETTE))
+                 if PALETTE[i] not in used and sum(abs(a - b) for a, b in zip(PALETTE[i], background)) >= 60)
+        used.add(c)
+        return c
+
+    n_shapes = int(rng.integers(1, 4))
+    flags = rng.random(n_shapes) < 0.5
+    flags[0] = True  # at least one morph per sample
+    for morph in flags:
+        size = float(rng.uniform(20, 34))
+        n_keys = int(rng.integers(2, 5))
+        tr = np.c_[_keyframed(rng, n_frames, n_keys, 45, SIZE[0] - 45), _keyframed(rng, n_frames, n_keys, 45, SIZE[1] - 45),
+                   _keyframed(rng, n_frames, n_keys, -90, 90) if rng.random() < 0.5 else np.zeros(n_frames),
+                   np.ones(n_frames)]
+        if morph:
+            a, b = rng.choice(["circle", "square", "triangle", "star", "rect"], 2, replace=False)
+            A, B = radial_outline(str(a), size), radial_outline(str(b), size)
+            m = _keyframed(rng, n_frames, int(rng.integers(2, 5)), 0, 1)
+            m = (m - m.min()) / max(np.ptp(m), 1e-9)  # the full morph happens at least once
+            frames_outline = A[None] * (1 - m[:, None, None]) + B[None] * m[:, None, None]
+            shapes.append(Shape(f"morph-{a}-{b}", colour(), A, None, tr, morph=frames_outline))
+        else:
+            kind = str(rng.choice([k for k in KINDS if k != "ring"]))
+            outer, hole = outline(kind, size, float(rng.uniform(0.5, 0.8)))
+            shapes.append(Shape(kind, colour(), outer, hole, tr))
+    frames = render(shapes, n_frames, SIZE, background)
+    return {"level": "morph", "seed": seed, "background": background, "frames": frames,
+            "shapes": shapes, "dither": True, "n_frames": n_frames}
+
+
 def make_sample(level: str, seed: int) -> dict:
     if level == "strokes":
         return make_stroke_sample(seed)
     if level == "gradients":
         return make_gradient_sample(seed)
+    if level == "morph":
+        return make_morph_sample(seed)
     rng = np.random.default_rng(seed)
     lo, hi, overlap, close, dither = LEVELS[level]
     n_shapes = int(rng.integers(lo, hi + 1))
@@ -214,7 +276,8 @@ def save_sample(sample: dict, out_dir: Path) -> Path:
                     **({"width": s.width, "closed": s.closed, "cap": s.cap, "trim": s.trim.round(4).tolist()}
                        if s.kind == "stroke" else {}),
                     **({"gradient": [np.round(s.gradient[0], 3).tolist(), np.round(s.gradient[1], 3).tolist(),
-                                     list(s.gradient[2]), list(s.gradient[3])]} if s.gradient else {})}
+                                     list(s.gradient[2]), list(s.gradient[3])]} if s.gradient else {}),
+                    **({"morph": s.morph.round(3).tolist()} if s.morph is not None else {})}
                    for s in sample["shapes"]],
     }
     (out_dir / f"{name}.json").write_text(json.dumps(truth))
