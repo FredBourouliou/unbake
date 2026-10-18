@@ -8,3 +8,4 @@ web/py/
 results/compare/
 data/real/
 results/real/*.png
+data/holdout2/

@@ -55,6 +55,9 @@ Then the 24 real animations are re-run and reported before/after, with no thresh
 **v0.2 holdout result (run once, commit `1e05f29`): not met, narrowly.** Strokes recovered 98.3 % (✓), mean stroke IoU **0.791** (✗, threshold 0.80), region IoU 0.855 (✓), medium samples with a false stroke **1/20 = 5 %** (✗, threshold < 5 %). v0.1 non-regression on the medium holdout holds: identity 96.9 %, 0.14 px, 0.47°, IoU 0.929.
 This holdout set is now spent: after one more iteration on the dev set, the criterion is re-checked on a fresh holdout (seeds 20 000–20 029 for strokes, 20 000–20 019 for medium), never seen before.
 
+**v0.2 on the fresh holdout (run once, commit `b697706`):** strokes recovered 97.1 % (✓), mean stroke IoU **0.822** (✓), region IoU 0.866 (✓), medium samples with a false stroke **1/20 = 5 %** (✗, threshold < 5 %). v0.1 non-regression holds (identity 95.3 %, 0.15 px, 0.37°, IoU 0.936).
+Verdict: three of four criteria met. The remaining failure is a rigid ring occasionally classified as a stroke (visually close, wrong object type for editing). Logged as a known issue; it will be fixed and checked on yet another unseen holdout, not on this one.
+
 ## Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |
