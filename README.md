@@ -1,14 +1,42 @@
-# Unbake (feasibility spike)
+# Unbake
 
-Turn a flattened motion-graphics animation (GIF/MP4) back into editable objects: shapes, colours and per-object motion that can be changed and re-exported.
+**Turn a flattened motion-graphics animation back into editable objects.** Drop a GIF: Unbake finds the shapes, their colours and their motion (position, rotation, scale, and lines that draw themselves), lets you select an object, drag its motion path or recolour it, and exports the result as Lottie JSON or animated SVG.
 
-This repository is currently a **one-week feasibility spike**, not a product.
+**[▶ Try it in your browser](https://fredbourouliou.github.io/unbake/)** — Python, OpenCV and SciPy run locally through WebAssembly; nothing is uploaded.
 
-## The question
+![The editor: a bouncing ball reconstructed from a GIF, with its motion path and keyframes](docs/editor.png)
+
+## What works, what doesn't (yet)
+
+- **Works:** flat 2D motion graphics on a plain background. Rigid shapes that move, rotate and scale (with occlusions and dithered GIFs), and constant-width strokes that draw on, draw off or spin like a loader.
+- **Doesn't yet:** gradients, shapes that morph, particles that merge, near-identical colours, photos or 3D.
+- On 24 real community animations (loaders, toggles, icons, logos), 18 come back faithful, 3 partial, 3 wrong. Details and every number below.
+
+## Use it from Python
+
+```bash
+uv sync
+uv run python scripts/unbake_cli.py animation.gif      # writes animation.json (Lottie) and animation.svg
+```
+
+Run the editor locally: `./scripts/build_web.sh && python3 -m http.server -d web 8000`.
+
+## How it works
+
+1. **Palette.** Background and dominant colours; every pixel labelled, ignoring dithering and antialiasing blends.
+2. **Strokes.** Over the whole animation, a line that draws itself only ever covers its own path: a thin region whose area changes. Its skeleton gives the centre line (refined to sub-pixel), the distance to the edges gives the width, and each frame gives the visible interval along the path.
+3. **Rigid objects.** Connected regions per colour, linked across frames, pieces cut by an occluder joined back. Each object's clearest view becomes a template fitted on every frame for position, rotation and scale; pixels hidden by another object are not counted against it.
+4. **Keyframes.** Per-frame values reduced with Ramer–Douglas–Peucker; this is what the editor edits and what the exports play (Lottie trim paths for strokes).
+
+## How it was built and measured
+
+Unbake started as a one-week feasibility spike with stop criteria written before the code, synthetic animations with known sources, and holdout sets used once. The log below is kept as it happened, failures included.
+
+### The question
 
 Can objects and their motion be reconstructed from rendered frames cleanly enough that editing them is useful?
 
-## Method
+### Method
 
 1. `unbake.corpus` generates synthetic animations whose source is known (shapes, colours, per-frame position, rotation, scale), exported as palette GIFs. Three levels:
    - **easy**: 1–3 shapes, distinct colours, no overlap, no dithering
@@ -17,7 +45,7 @@ Can objects and their motion be reconstructed from rendered frames cleanly enoug
 2. The reconstruction only sees the GIF. The ground truth is used for scoring only.
 3. Dev set (seeds 0…) is used while developing. **Holdout set (seeds 10 000…) is only run for the final numbers.**
 
-## Stop criterion (written before any reconstruction code)
+### Stop criterion (written before any reconstruction code)
 
 Measured on the **medium holdout** set, per ground-truth object and frame:
 
@@ -38,7 +66,7 @@ The hard set is reported but not part of the decision.
 
 **Correction logged on day 1 (holdout run):** the first holdout run crashed on `easy-10007` before printing any metric: the GIF encoder had merged identical consecutive frames and extended their duration, and the loader ignored durations. The loader now decodes at a constant frame rate using frame durations (needed for real-world GIFs anyway). No reconstruction logic was changed; the holdout set was then run once.
 
-## v0.2: animated strokes (stop criterion written before any detection code)
+### v0.2: animated strokes (stop criterion written before any detection code)
 
 New corpus level **strokes**: 1–3 constant-width strokes (circle loops, waves, zigzags; round or butt caps) that draw on, draw off, draw on then off, or spin like a loader, mixed with 0–2 rigid shapes. Ground truth: centre line, width, cap, per-frame visible interval. Dev seeds 0–29, holdout seeds 10 000–10 029.
 
@@ -58,7 +86,7 @@ This holdout set is now spent: after one more iteration on the dev set, the crit
 **v0.2 on the fresh holdout (run once, commit `b697706`):** strokes recovered 97.1 % (✓), mean stroke IoU **0.822** (✓), region IoU 0.866 (✓), medium samples with a false stroke **1/20 = 5 %** (✗, threshold < 5 %). v0.1 non-regression holds (identity 95.3 %, 0.15 px, 0.37°, IoU 0.936).
 Verdict: three of four criteria met. The remaining failure is a rigid ring occasionally classified as a stroke (visually close, wrong object type for editing). Logged as a known issue; it will be fixed and checked on yet another unseen holdout, not on this one.
 
-## Results (holdout, run once, commit `e34f877`)
+### Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |
 |---|---|---|---|---|---|---|
@@ -72,7 +100,7 @@ The hard level (near-identical colours, same-colour shapes crossing) fails, as e
 
 Reproduce: `uv run python -m unbake.corpus data && uv run python scripts/evaluate.py data/holdout`.
 
-## Real-world test
+### Real-world test
 
 24 community animations from the LottieFiles collection bundled in [airbnb/lottie-android](https://github.com/airbnb/lottie-android/tree/master/snapshot-tests/src/main/assets/lottiefiles) (loaders, toggles, icons, logos, emoji), rendered to dithered 256 px GIFs and unbaked. No object-level ground truth here: the score is the per-colour-region IoU between input and reconstruction, plus a visual review of every contact sheet (`scripts/real_gifs.py`).
 
@@ -98,7 +126,7 @@ Mean IoU 0.72 (it penalises thin strokes and small objects heavily: several "fai
 
 Biggest gains: material_loader 0.33 → 0.86, play_button 0.59 → 0.94, colorline 0.34 → 0.85. A branched outline icon (medal) is now explicitly left to the rigid model (a stroke must be one simple path covering ≥ 75 % of its skeleton).
 
-## Comparison
+### Comparison
 
 OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach. Both tools were run on the first 10 medium holdout GIFs; both outputs are Lottie JSON rendered by lottie-web at the input's size and frame count, composited on the input background, and scored with the same per-colour-region IoU.
 
@@ -108,3 +136,7 @@ OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned
 | OmniLottie (official `inference_hf.py`, greedy decoding) | 0.013 | 53 s (Apple M5 Max, MPS) | 10/10 |
 
 OmniLottie returned valid animations that do not depict the input (generic icons instead of the shapes shown). Caveats: it is a generative model that sees 8 sampled frames and is not designed for faithful reconstruction; it was run on Apple MPS (the repository is only tested on CUDA), which may affect its output. Per-GIF numbers: `results/compare-omnilottie.json`. Reproduce: `scripts/compare_omnilottie.py`.
+
+## License
+
+[MIT](LICENSE). The demo samples in `web/samples/` are generated by `scripts/make_samples.py`.

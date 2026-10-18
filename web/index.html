@@ -104,11 +104,11 @@
     <h2>How it works</h2>
     <ol>
       <li><strong>Palette.</strong> Find the background and the dominant colours; label every pixel, ignoring dithering and antialiasing blends.</li>
-      <li><strong>Objects.</strong> Connected regions per colour, linked across frames, with pieces cut by an occluder joined back together.</li>
-      <li><strong>Motion.</strong> Each object's clearest view becomes a template, fitted on every frame for position, rotation and scale; pixels hidden by another object are not counted against it.</li>
-      <li><strong>Keyframes.</strong> Per-frame values are reduced to keyframes (Ramer–Douglas–Peucker), which is what you edit and what the exports play.</li>
+      <li><strong>Strokes.</strong> A line that draws itself only ever covers its own path: a thin region whose area changes. Its skeleton gives the centre line, its edges the width, each frame the visible interval.</li>
+      <li><strong>Objects.</strong> Connected regions per colour, linked across frames; each object's clearest view becomes a template fitted on every frame for position, rotation and scale, without counting pixels hidden by another object against it.</li>
+      <li><strong>Keyframes.</strong> Per-frame values are reduced to keyframes (Ramer–Douglas–Peucker): that is what you edit and what the exports play.</li>
     </ol>
-    <p>On a synthetic benchmark with known sources (3–5 overlapping shapes, dithered GIFs), objects keep their identity on 98.6 % of frames, positions are within 0.14 px and rotations within 0.5° (median). Near-identical colours are still out of reach. <a href="https://github.com/FredBourouliou/unbake">Method and numbers</a>.</p>
+    <p>On synthetic animations with known sources (3–5 overlapping shapes, dithered GIFs), objects keep their identity on 95–99 % of frames, within 0.15 px and 0.5° (median); animated strokes are recovered 97 % of the time. On 24 real community animations, 18 come back faithful. Gradients, morphing shapes and near-identical colours are still out of reach. <a href="https://github.com/FredBourouliou/unbake#how-it-was-built-and-measured">Method and numbers</a>.</p>
   </section>
 
   <script src="app.js" type="module"></script>
