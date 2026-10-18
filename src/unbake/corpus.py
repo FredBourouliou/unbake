@@ -128,6 +128,11 @@ def make_gradient_sample(seed: int) -> dict:
     n_shapes = int(rng.integers(2, 5))
     flags = rng.random(n_shapes) < 0.5
     flags[rng.integers(n_shapes)] = True  # at least one gradient per sample
+    # Each gradient takes two palette colours: keep only as many as the palette can serve
+    # (without this, seeds with four gradients could not be generated).
+    usable = sum(sum(abs(a - b) for a, b in zip(c, background)) >= 60 for c in PALETTE)
+    while 2 * flags.sum() + (n_shapes - flags.sum()) > usable:
+        flags[np.flatnonzero(flags)[-1]] = False
     for grad in flags:
         kind = str(rng.choice([k for k in KINDS if k != "ring"] if grad else KINDS))
         size = float(rng.uniform(18, 32))

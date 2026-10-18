@@ -9,7 +9,8 @@
 ## What works, what doesn't (yet)
 
 - **Works:** flat 2D motion graphics on a plain background. Rigid shapes that move, rotate and scale (with occlusions and dithered GIFs), and constant-width strokes that draw on, draw off or spin like a loader.
-- **Doesn't yet:** gradients, shapes that morph, particles that merge, near-identical colours, photos or 3D.
+- **Also:** two-colour linear gradient fills that move and turn with their shape (v0.4).
+- **Doesn't yet:** radial or multi-stop gradients, shapes that morph, particles that merge, near-identical colours, photos or 3D.
 - On 24 real community animations (loaders, toggles, icons, logos), 18 come back faithful, 3 partial, 3 wrong. Details and every number below.
 
 ## Use it from Python
@@ -129,6 +130,24 @@ A new corpus level, **gradients**: 2–4 overlapping shapes, about half of them 
 | Lottie export rendered by lottie-web vs the reconstruction's own render, foreground | ≤ 4 / 255 |
 
 Non-regression: medium samples given a gradient by mistake ≤ 5 %, and the four v0.1 thresholds on medium still hold. Measured on dev while developing, then once on a fresh holdout (seeds 50 000+: 60 gradients, 100 medium).
+
+How it works: once dithering is blurred away, the inside of a flat shape has one colour and the inside of a gradient fill has a colour that is an affine function of position, with all channels changing along one direction. Smooth regions (no colour edge) that fit such a model with a large colour range are gradient fills; regions from different frames are grouped by colour line (a partly hidden fill covers part of the same line), and each group is tracked like one more palette colour. The gradient is then fitted in the object's local frame over all its views; for a disc, whose outline shows no rotation, the gradient's direction gives it.
+
+**Result on the fresh holdout (run once, commit `3994e5c`): not met on one criterion.**
+
+| Metric | Result | |
+|---|---|---|
+| Gradient shapes recovered as one gradient object | 100 % of 101 | ✓ |
+| Identity | 95.6 % | ✓ |
+| Median position error | 0.21 px | ✓ |
+| Foreground colour error vs ground truth | **6.69 / 255** | ✗ (≤ 4) |
+| Lottie export (lottie-web) vs own render | 2.96 / 255 | ✓ |
+| Medium samples given a false gradient | 0/100 | ✓ |
+| v0.1 thresholds on medium | 96.4 %, 0.15 px, 0.43°, IoU 0.932 | ✓ |
+
+Why the colour criterion fails, measured after the fact: the threshold was set without measuring what flat shapes already score on it. On the same holdout, **flat medium shapes score 6.16** with the same metric. Inside shapes the error is 2.65 (gradients) and 2.13 (flat); almost all of the rest comes from a 2-pixel band along the outlines, where a sub-pixel outline difference (0.35 px on average) meets a high-contrast edge. So gradient colours are right, but the criterion as written is not met, and outline precision (for all shapes, not gradients) is what would move it.
+
+Two more things to report. Four of the 60 holdout seeds could not be generated (four gradients need eight palette colours, the palette has seven); the evaluation ran on the 56 others, and the generator now drops extra gradients instead (existing samples unchanged). On the 24 real animations, *turbine*'s purple disc now comes back as one gradient instead of two flat pieces, which looks closer but lowers its per-colour region score (0.88 → 0.51, a metric that labels each pixel with the nearest flat colour); the others are unchanged.
 
 ### Results (holdout, run once, commit `e34f877`)
 
