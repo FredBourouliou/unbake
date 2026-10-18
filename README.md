@@ -38,6 +38,20 @@ The hard set is reported but not part of the decision.
 
 **Correction logged on day 1 (holdout run):** the first holdout run crashed on `easy-10007` before printing any metric: the GIF encoder had merged identical consecutive frames and extended their duration, and the loader ignored durations. The loader now decodes at a constant frame rate using frame durations (needed for real-world GIFs anyway). No reconstruction logic was changed; the holdout set was then run once.
 
+## Results (holdout, run once, commit `e34f877`)
+
+| Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |
+|---|---|---|---|---|---|---|
+| easy | 100.0 % | 0.10 px | 0.19° | 0.953 | 43/43 | 1.1 s |
+| medium | 98.6 % | 0.14 px | 0.47° | 0.934 | 86/83 | 1.5 s |
+| hard | 43.1 % | 0.82 px | 3.57° | 0.679 | 50/49 | 1.7 s |
+
+**Decision: go.** All four thresholds are met on the medium holdout set (≥ 90 %, ≤ 2 px, ≤ 5°, ≥ 0.90).
+
+The hard level (near-identical colours, same-colour shapes crossing) fails, as expected: colour alone cannot separate objects there. That is the next research problem, not a blocker for the editor.
+
+Reproduce: `uv run python -m unbake.corpus data && uv run python scripts/evaluate.py data/holdout`.
+
 ## Comparison
 
 OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach; it will be run on a subset of the same holdout GIFs when feasible on local hardware.
