@@ -52,6 +52,9 @@ Non-regression on the medium holdout: the four v0.1 thresholds still hold, and f
 
 Then the 24 real animations are re-run and reported before/after, with no threshold.
 
+**v0.2 holdout result (run once, commit `1e05f29`): not met, narrowly.** Strokes recovered 98.3 % (✓), mean stroke IoU **0.791** (✗, threshold 0.80), region IoU 0.855 (✓), medium samples with a false stroke **1/20 = 5 %** (✗, threshold < 5 %). v0.1 non-regression on the medium holdout holds: identity 96.9 %, 0.14 px, 0.47°, IoU 0.929.
+This holdout set is now spent: after one more iteration on the dev set, the criterion is re-checked on a fresh holdout (seeds 20 000–20 029 for strokes, 20 000–20 019 for medium), never seen before.
+
 ## Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |

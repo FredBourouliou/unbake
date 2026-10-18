@@ -1,32 +1,12 @@
 {
-  "easy": {
-    "samples": 20,
-    "identity": 0.9996598639455783,
-    "pos_median": 0.10172267545173475,
-    "rot_median": 0.19149999999999778,
-    "scale_median": 0.007084220736923205,
-    "iou": 0.952589594145952,
-    "objects_found/true": "43/43",
-    "seconds_per_gif": 1.0776668310165405
-  },
   "medium": {
     "samples": 20,
-    "identity": 0.9862561973852049,
+    "identity": 0.9685297566926389,
     "pos_median": 0.1363678639076167,
-    "rot_median": 0.46775000000000233,
-    "scale_median": 0.006442075486272236,
-    "iou": 0.9340008433645316,
-    "objects_found/true": "86/83",
-    "seconds_per_gif": 1.4977299690246582
-  },
-  "hard": {
-    "samples": 10,
-    "identity": 0.4313743425672156,
-    "pos_median": 0.8234257319193594,
-    "rot_median": 3.5705000000000062,
-    "scale_median": 0.012836796627787526,
-    "iou": 0.678971421898114,
-    "objects_found/true": "50/49",
-    "seconds_per_gif": 1.7096639156341553
+    "rot_median": 0.4662500000000023,
+    "scale_median": 0.00646472575337915,
+    "iou": 0.9289462928104658,
+    "objects_found/true": "91/83",
+    "seconds_per_gif": 1.5182698488235473
   }
 }
