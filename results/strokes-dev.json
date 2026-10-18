@@ -1,7 +1,7 @@
 {
   "strokes_recovered": 1.0,
-  "stroke_iou": 0.8246057904523977,
-  "region_iou": 0.8550118681981311,
+  "stroke_iou": 0.8619857492657436,
+  "region_iou": 0.8994209299515382,
   "n_strokes": 50,
   "medium_with_false_stroke": "0/20"
 }

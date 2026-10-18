@@ -7,7 +7,7 @@
     "scale_median": 0.006018805921486231,
     "iou": 0.9633771798860492,
     "objects_found/true": "51/50",
-    "seconds_per_gif": 1.2537409782409668
+    "seconds_per_gif": 1.2436493396759034
   },
   "medium": {
     "samples": 20,
@@ -17,6 +17,6 @@
     "scale_median": 0.007970376915294404,
     "iou": 0.9209076317988334,
     "objects_found/true": "94/90",
-    "seconds_per_gif": 1.7431783199310302
+    "seconds_per_gif": 1.7256288170814513
   }
 }

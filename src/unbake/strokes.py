@@ -52,6 +52,7 @@ def detect_strokes(labels: np.ndarray, colours: np.ndarray) -> tuple[list[Shape]
             if path is None or len(path) < 8:
                 continue
             line = _smooth_resample(path, closed)
+            line, width = _refine_centre(line, closed, region, width)
             raw = _visible_intervals(line, closed, on & region[None], width)
             if raw is None:
                 continue
@@ -167,6 +168,46 @@ def _smooth_resample(path: np.ndarray, closed: bool, step: float = 1.0) -> np.nd
     return out
 
 
+def _refine_centre(line: np.ndarray, closed: bool, region: np.ndarray, width: float) -> tuple[np.ndarray, float]:
+    """Sub-pixel centre line and width: recentre each point between the region's edges along its normal."""
+    H, W = region.shape
+    if closed:
+        tang = np.roll(line, -2, 0) - np.roll(line, 2, 0)
+    else:
+        tang = np.gradient(line, axis=0)
+    tang /= np.linalg.norm(tang, axis=1, keepdims=True) + 1e-9
+    normal = np.c_[-tang[:, 1], tang[:, 0]]
+    steps = np.arange(-1.5 * width - 2, 1.5 * width + 2, 0.25)
+    offsets, widths = np.zeros(len(line)), np.full(len(line), np.nan)
+    for i, (p, n) in enumerate(zip(line, normal)):
+        q = p + steps[:, None] * n
+        x, y = np.floor(q[:, 0]).astype(int), np.floor(q[:, 1]).astype(int)
+        ok = (x >= 0) & (x < W) & (y >= 0) & (y < H)
+        inside = np.zeros(len(steps), bool)
+        inside[ok] = region[y[ok], x[ok]]
+        c = len(steps) // 2
+        if not inside[c]:
+            continue
+        a = c
+        while a > 0 and inside[a - 1]:
+            a -= 1
+        b = c
+        while b < len(steps) - 1 and inside[b + 1]:
+            b += 1
+        lo, hi = steps[a] - 0.125, steps[b] + 0.125
+        offsets[i] = (lo + hi) / 2
+        widths[i] = hi - lo
+    k = 7
+    kern = np.ones(2 * k + 1) / (2 * k + 1)
+    if closed:
+        sm = np.convolve(np.r_[offsets[-k:], offsets, offsets[:k]], kern, "same")[k:-k]
+    else:
+        sm = np.convolve(np.r_[np.repeat(offsets[:1], k), offsets, np.repeat(offsets[-1:], k)], kern, "same")[k:-k]
+    refined = line + sm[:, None] * normal
+    good = widths[~np.isnan(widths)]
+    return refined, (float(np.median(good)) if good.size else width)
+
+
 def _length(line: np.ndarray, closed: bool) -> float:
     pts = np.vstack([line, line[:1]]) if closed else line
     return float(np.linalg.norm(np.diff(pts, axis=0), axis=1).sum())
@@ -232,39 +273,48 @@ def _longest_run(v: np.ndarray, closed: bool) -> tuple[int, int]:
 
 
 def _best_cap(line, closed, width, raw, colour, masks, size) -> Shape:
-    """Round caps make the visible run longer by half a width at each free end: try both caps."""
-    T = len(raw)
+    """Pick cap and width together: the pair whose rendering best matches the observed pixels.
+
+    Round caps make the visible run longer by half a width at each free end, so the trim is
+    corrected accordingly for that cap.
+    """
     total = _length(line, closed)
-    track = np.where(np.isnan(raw[:, :1]), np.nan, 0.0) * np.ones((1, 4))
+    track = np.full((len(raw), 4), np.nan)
     track[~np.isnan(raw[:, 0])] = [0.0, 0.0, 0.0, 1.0]
-    best, best_iou = None, -1.0
     frames = np.flatnonzero(~np.isnan(raw[:, 0]))
     sample = frames[:: max(1, len(frames) // 8)]
+    best, best_iou = None, -1.0
     for cap in ("round", "butt"):
-        trim = raw.copy()
-        if cap == "round":
-            d = (width / 2) / total
-            full = (raw[:, 0] == 0) & (raw[:, 1] == 1)
-            for t in frames:
-                if full[t]:
-                    continue
-                s, e = raw[t]
-                if closed or s > 0:
-                    s = (s + d) % 1.0 if closed else min(s + d, 1.0)
-                if closed or e < 1:
-                    e = (e - d) % 1.0 if closed else max(e - d, 0.0)
-                trim[t] = (s, e)
-        shape = Shape("stroke", colour, line, None, track.copy(), width=width, closed=closed, cap=cap, trim=trim)
-        probe = Shape("stroke", (255, 255, 255), line, None, shape.track, width=width, closed=closed, cap=cap, trim=trim)
-        ious = []
-        for t in sample:
-            img = render_frame([probe], int(t), size, (0, 0, 0))
-            drawn = img.max(axis=2) > 127
-            obs = masks[t]
-            u = np.count_nonzero(drawn | obs)
-            if u:
-                ious.append(np.count_nonzero(drawn & obs) / u)
-        iou = float(np.mean(ious)) if ious else 0.0
-        if iou > best_iou:
-            best, best_iou = shape, iou
+        for w in (width - 1.0, width - 0.5, width, width + 0.5):
+            if w < 1.5:
+                continue
+            trim = _cap_trim(raw, frames, closed, (w / 2) / total if cap == "round" else 0.0)
+            probe = Shape("stroke", (255, 255, 255), line, None, track, width=w, closed=closed, cap=cap, trim=trim)
+            ious = []
+            for t in sample:
+                drawn = render_frame([probe], int(t), size, (0, 0, 0)).max(axis=2) > 127
+                obs = masks[t]
+                u = np.count_nonzero(drawn | obs)
+                if u:
+                    ious.append(np.count_nonzero(drawn & obs) / u)
+            iou = float(np.mean(ious)) if ious else 0.0
+            if iou > best_iou:
+                best_iou = iou
+                best = Shape("stroke", colour, line, None, track.copy(), width=w, closed=closed, cap=cap, trim=trim)
     return best
+
+
+def _cap_trim(raw, frames, closed, d):
+    trim = raw.copy()
+    if d == 0:
+        return trim
+    for t in frames:
+        s, e = raw[t]
+        if s == 0 and e == 1:
+            continue
+        if closed or s > 0:
+            s = (s + d) % 1.0 if closed else min(s + d, 1.0)
+        if closed or e < 1:
+            e = (e - d) % 1.0 if closed else max(e - d, 0.0)
+        trim[t] = (s, e)
+    return trim
