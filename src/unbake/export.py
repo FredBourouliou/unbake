@@ -10,6 +10,7 @@ import math
 
 import numpy as np
 
+from .easing import fit_channel
 from .scene import Shape, holes
 
 # Maximum deviation allowed when dropping a frame, per channel.
@@ -69,8 +70,15 @@ def trim_keys(shape: Shape) -> tuple[np.ndarray, np.ndarray, np.ndarray, list[in
     return visible, start, length, ks, kl
 
 
-def keyframe_count(shapes: list[Shape]) -> tuple[int, int]:
+def keyframe_count(shapes: list[Shape], easing: bool = True) -> tuple[int, int]:
     """(keyframes kept, frames × channels before simplification)."""
+    if easing:
+        kept = total = 0
+        for s in shapes:
+            visible, chans = eased_channels(s)
+            kept += sum(len(k) for k in chans.values())
+            total += len(chans) * len(visible)
+        return kept, total
     kept = total = 0
     for s in shapes:
         if s.kind == "stroke":
@@ -129,8 +137,8 @@ def _anim(frames: list[int], values: list) -> dict:
     return {"a": 1, "k": k}
 
 
-def to_lottie(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
-              background: tuple[int, int, int]) -> dict:
+def _to_lottie_linear(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
+                      background: tuple[int, int, int]) -> dict:
     w, h = size
     layers = []
     for idx, s in enumerate(reversed(shapes)):  # Lottie draws the first layer on top
@@ -175,8 +183,8 @@ def _d(points: np.ndarray) -> str:
     return "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in points) + " Z"
 
 
-def to_svg(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
-           background: tuple[int, int, int]) -> str:
+def _to_svg_linear(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
+                   background: tuple[int, int, int]) -> str:
     w, h = size
     dur = n_frames / fps
     out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">',
@@ -268,3 +276,160 @@ def save(rec: dict, size: tuple[int, int], fps: int, stem: str) -> tuple[str, st
     with open(stem + ".svg", "w") as f:
         f.write(svg)
     return stem + ".json", stem + ".svg"
+
+
+# Eased export (v0.3) ---------------------------------------------------------------------
+
+EASE_TOLERANCE = {"x": 0.5, "y": 0.5, "rot": 1.5, "scale": 0.015, "start": 0.004, "len": 0.004, "end": 0.004}
+
+
+def channels(shape: Shape) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    """Visible frames and the animated channels of a shape (values on those frames)."""
+    if shape.kind == "stroke":
+        visible, start, length, _, _ = trim_keys(shape)
+        if shape.closed:
+            return visible, {"start": start, "len": length}
+        return visible, {"start": start, "end": np.clip(start + length, 0, 1)}
+    visible = np.flatnonzero(~np.isnan(shape.track[:, 0]))
+    tr = shape.track[visible]
+    rot = np.unwrap(np.deg2rad(tr[:, 2])) * 180 / math.pi
+    return visible, {"x": tr[:, 0], "y": tr[:, 1], "rot": rot, "scale": tr[:, 3]}
+
+
+def eased_channels(shape: Shape) -> tuple[np.ndarray, dict[str, list[tuple[int, float, tuple]]]]:
+    """Per channel: keyframes as (frame, value, easing to the next keyframe)."""
+    visible, chans = channels(shape)
+    t = visible.astype(float)
+    out = {}
+    for name, v in chans.items():
+        keys = fit_channel(t, v, EASE_TOLERANCE[name])
+        out[name] = [(int(visible[k]), float(v[k]), c) for k, c in keys]
+    return visible, out
+
+
+def _anim_eased(keys, fmt) -> dict:
+    """Lottie property from eased keys; each keyframe carries the easing to the next one."""
+    if len(keys) == 1:
+        return {"a": 0, "k": fmt(keys[0][1])}
+    k = []
+    for j, (f, v, c) in enumerate(keys):
+        item = {"t": f, "s": fmt(v)}
+        if j < len(keys) - 1:
+            item["o"] = {"x": [round(c[0], 4)], "y": [round(c[1], 4)]}
+            item["i"] = {"x": [round(c[2], 4)], "y": [round(c[3], 4)]}
+        k.append(item)
+    return {"a": 1, "k": k}
+
+
+def _static(v):
+    return {"a": 0, "k": v}
+
+
+def to_lottie(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
+              background: tuple[int, int, int], easing: bool = True) -> dict:
+    if not easing:
+        return _to_lottie_linear(shapes, size, fps, n_frames, background)
+    doc = _to_lottie_linear(shapes, size, fps, n_frames, background)  # same structure, then replace the animation
+    shape_layers = [l for l in doc["layers"] if l["ty"] == 4]
+    for layer, s in zip(shape_layers, list(reversed(shapes))):
+        _, ch = eased_channels(s)
+        r3 = lambda v: round(v, 3)  # noqa: E731
+        if s.kind == "stroke":
+            trim = next(it for it in layer["shapes"][0]["it"] if it["ty"] == "tm")
+            if s.closed:
+                trim["s"] = _static(0)
+                trim["e"] = _anim_eased(ch["len"], lambda v: [r3(v * 100)])
+                trim["o"] = _anim_eased(ch["start"], lambda v: [r3(v * 360)])
+            else:
+                trim["s"] = _anim_eased(ch["start"], lambda v: [r3(v * 100)])
+                trim["e"] = _anim_eased(ch["end"], lambda v: [r3(v * 100)])
+                trim["o"] = _static(0)
+            continue
+        ks = layer["ks"]
+        ks["p"] = {"s": True, "x": _anim_eased(ch["x"], lambda v: [r3(v)]), "y": _anim_eased(ch["y"], lambda v: [r3(v)])}
+        ks["r"] = _anim_eased(ch["rot"], lambda v: [r3(v)])
+        ks["s"] = _anim_eased(ch["scale"], lambda v: [r3(v * 100), r3(v * 100), 100])
+    return doc
+
+
+def _smil(kind: str, keys, n: int, dur: float, fmt, transform: bool = True, const: bool = False) -> str:
+    """SMIL animation with one keySpline per interval (holds before the first / after the last key).
+
+    A single key gives no animation, or a constant one when `const` is set (needed so that
+    additive transforms keep their order).
+    """
+    if len(keys) == 1:
+        if not const:
+            return ""
+        keys = [keys[0], (keys[0][0] + 1, keys[0][1], keys[0][2])]
+    times = [f / n for f, _, _ in keys]
+    vals = [fmt(v) for _, v, _ in keys]
+    splines = [f"{c[0]:.4f} {c[1]:.4f} {c[2]:.4f} {c[3]:.4f}" for _, _, c in keys[:-1]]
+    if times[0] > 0:
+        times, vals, splines = [0.0] + times, [vals[0]] + vals, ["0 0 1 1"] + splines
+    times, vals, splines = times + [1.0], vals + [vals[-1]], splines + ["0 0 1 1"]
+    common = (f'dur="{dur:.3f}s" repeatCount="indefinite" calcMode="spline" '
+              f'keyTimes="{";".join(f"{x:.4f}" for x in times)}" keySplines="{";".join(splines)}" values="{";".join(vals)}"')
+    if transform:
+        return f'<animateTransform attributeName="transform" type="{kind}" additive="sum" {common}/>'
+    return f'<animate attributeName="{kind}" {common}/>'
+
+
+def to_svg(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
+           background: tuple[int, int, int], easing: bool = True) -> str:
+    if not easing:
+        return _to_svg_linear(shapes, size, fps, n_frames, background)
+    w, h = size
+    dur = n_frames / fps
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">',
+           f'<rect width="{w}" height="{h}" fill="rgb{tuple(background)}"/>']
+    for s in shapes:
+        visible, ch = eased_channels(s)
+        vis = ""
+        if visible[0] > 0 or visible[-1] < n_frames - 1:
+            a, b = visible[0] / n_frames, (visible[-1] + 1) / n_frames
+            vis = (f'<animate attributeName="visibility" dur="{dur:.3f}s" repeatCount="indefinite" calcMode="discrete" '
+                   f'keyTimes="0;{a:.4f};{b:.4f}" values="hidden;visible;hidden"/>')
+        if s.kind == "stroke":
+            out.append(_svg_stroke_eased(s, ch, n_frames, dur, vis))
+            continue
+        # One animation per channel, in SVG's composition order: translate x, translate y, rotate, scale.
+        anims = (_smil("translate", ch["x"], n_frames, dur, lambda v: f"{v:.2f} 0", const=True)
+                 + _smil("translate", ch["y"], n_frames, dur, lambda v: f"0 {v:.2f}", const=True)
+                 + _smil("rotate", ch["rot"], n_frames, dur, lambda v: f"{v:.2f}", const=True)
+                 + _smil("scale", ch["scale"], n_frames, dur, lambda v: f"{v:.4f}", const=True))
+        d = " ".join([_d(s.outer)] + [_d(hp) for hp in holes(s)])
+        out.append(f'<g>{anims}{vis}<path d="{d}" fill="rgb{tuple(s.color)}" fill-rule="evenodd"/></g>')
+    out.append("</svg>")
+    return "\n".join(out)
+
+
+def _svg_stroke_eased(s: Shape, ch, n_frames: int, dur: float, vis: str) -> str:
+    line = s.outer[:: max(1, len(s.outer) // 200)]
+    d = "M" + " L".join(f"{x:.2f},{y:.2f}" for x, y in line) + (" Z" if s.closed else "")
+    if s.closed:
+        length_keys = ch["len"]
+    else:
+        # SVG dashes need the visible length: evaluate end - start on every visible frame, then fit it.
+        from .easing import sample_channel
+
+        def per_frame(keys):
+            fs = np.array([k[0] for k in keys], float)
+            vs = np.array([k[1] for k in keys])
+            return sample_channel(fs, vs, [(i, k[2]) for i, k in enumerate(keys)], visible.astype(float))
+        visible = np.arange(ch["start"][0][0], ch["start"][-1][0] + 1)
+        length = per_frame(ch["end"]) - per_frame(ch["start"])
+        length_keys = [(int(visible[k]), float(length[k]), c)
+                       for k, c in fit_channel(visible.astype(float), length, EASE_TOLERANCE["len"])]
+    dash = _smil("stroke-dasharray", length_keys, n_frames, dur,
+                 lambda v: f"{min(max(v, 0.0), 1.0):.4f} {1 - min(max(v, 0.0), 1.0):.4f}", transform=False)
+    offset = _smil("stroke-dashoffset", ch["start"], n_frames, dur, lambda v: f"{-v:.4f}", transform=False)
+    if not dash:
+        v = min(max(length_keys[0][1], 0.0), 1.0)
+        dash_attr = f' stroke-dasharray="{v:.4f} {1 - v:.4f}"'
+    else:
+        dash_attr = ""
+    off_attr = "" if offset else f' stroke-dashoffset="{-ch["start"][0][1]:.4f}"'
+    cap = "round" if s.cap == "round" else "butt"
+    return (f'<path d="{d}" pathLength="1" fill="none" stroke="rgb{tuple(s.color)}" stroke-width="{s.width:.2f}" '
+            f'stroke-linecap="{cap}" stroke-linejoin="round"{dash_attr}{off_attr}>{dash}{offset}{vis}</path>')
