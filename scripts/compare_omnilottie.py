@@ -29,7 +29,7 @@ for gif in sorted(Path("data/holdout").glob("medium-*.gif"))[:n]:
     T = len(rec["frames"])
     u_json, _ = save(rec, (w, h), 24, str(out / f"{gif.stem}.unbake"))
     t_unbake = time.time() - t0
-    iou_u = region_iou(rec["labels"], render_lottie(u_json, (w, h), T), rec["background"], rec["colours"])
+    iou_u = region_iou(rec["labels"], render_lottie(u_json, (w, h), T, rec["background"]), rec["background"], rec["colours"])
 
     o_json = out / f"{gif.stem}.omnilottie.json"
     t0 = time.time()
@@ -40,7 +40,7 @@ for gif in sorted(Path("data/holdout").glob("medium-*.gif"))[:n]:
     iou_o, err = 0.0, ""
     if proc.returncode == 0 and o_json.exists():
         try:
-            iou_o = region_iou(rec["labels"], render_lottie(str(o_json), (w, h), T), rec["background"], rec["colours"])
+            iou_o = region_iou(rec["labels"], render_lottie(str(o_json), (w, h), T, rec["background"]), rec["background"], rec["colours"])
         except Exception as e:  # invalid Lottie counts as a failure
             err = f"render failed: {e}"
     else:

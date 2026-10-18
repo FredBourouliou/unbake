@@ -1,0 +1,91 @@
+{
+  "summary": {
+    "unbake_iou": 0.9336262651830175,
+    "unbake_s": 0.9737607955932617,
+    "omnilottie_iou": 0.012755674179405544,
+    "omnilottie_s": 53.19128203392029,
+    "omnilottie_failures": 0
+  },
+  "rows": [
+    {
+      "gif": "medium-10000",
+      "unbake_iou": 0.9317433650307838,
+      "unbake_s": 0.8539681434631348,
+      "omnilottie_iou": 0.012798571463249343,
+      "omnilottie_s": 136.3482699394226,
+      "error": ""
+    },
+    {
+      "gif": "medium-10001",
+      "unbake_iou": 0.954670596944902,
+      "unbake_s": 1.1260321140289307,
+      "omnilottie_iou": 0.011116164521895332,
+      "omnilottie_s": 31.19361925125122,
+      "error": ""
+    },
+    {
+      "gif": "medium-10002",
+      "unbake_iou": 0.9407031820508145,
+      "unbake_s": 1.0592832565307617,
+      "omnilottie_iou": 0.014615312582021853,
+      "omnilottie_s": 26.368118047714233,
+      "error": ""
+    },
+    {
+      "gif": "medium-10003",
+      "unbake_iou": 0.956419245099398,
+      "unbake_s": 0.8632040023803711,
+      "omnilottie_iou": 0.0021136560940782398,
+      "omnilottie_s": 30.480576992034912,
+      "error": ""
+    },
+    {
+      "gif": "medium-10004",
+      "unbake_iou": 0.9384458862952975,
+      "unbake_s": 1.0114822387695312,
+      "omnilottie_iou": 0.023678003488781355,
+      "omnilottie_s": 47.16686701774597,
+      "error": ""
+    },
+    {
+      "gif": "medium-10005",
+      "unbake_iou": 0.8771353979262688,
+      "unbake_s": 0.9069578647613525,
+      "omnilottie_iou": 0.03083552379214292,
+      "omnilottie_s": 58.585224866867065,
+      "error": ""
+    },
+    {
+      "gif": "medium-10006",
+      "unbake_iou": 0.9452022104716205,
+      "unbake_s": 0.8632702827453613,
+      "omnilottie_iou": 4.178688530369189e-05,
+      "omnilottie_s": 108.67086482048035,
+      "error": ""
+    },
+    {
+      "gif": "medium-10007",
+      "unbake_iou": 0.9342945397368879,
+      "unbake_s": 0.9425079822540283,
+      "omnilottie_iou": 0.015272309650563764,
+      "omnilottie_s": 21.989487171173096,
+      "error": ""
+    },
+    {
+      "gif": "medium-10008",
+      "unbake_iou": 0.9375820695336122,
+      "unbake_s": 0.990807056427002,
+      "omnilottie_iou": 0.005963132688788076,
+      "omnilottie_s": 28.626965045928955,
+      "error": ""
+    },
+    {
+      "gif": "medium-10009",
+      "unbake_iou": 0.920066158740591,
+      "unbake_s": 1.1200950145721436,
+      "omnilottie_iou": 0.011122280627230849,
+      "omnilottie_s": 42.48282718658447,
+      "error": ""
+    }
+  ]
+}

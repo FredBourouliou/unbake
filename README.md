@@ -54,4 +54,11 @@ Reproduce: `uv run python -m unbake.corpus data && uv run python scripts/evaluat
 
 ## Comparison
 
-OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach; it will be run on a subset of the same holdout GIFs when feasible on local hardware.
+OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach. Both tools were run on the first 10 medium holdout GIFs; both outputs are Lottie JSON rendered by lottie-web at the input's size and frame count, composited on the input background, and scored with the same per-colour-region IoU.
+
+| | Mean IoU | Mean time per GIF | Valid Lottie |
+|---|---|---|---|
+| Unbake | 0.934 | 1.0 s (CPU) | 10/10 |
+| OmniLottie (official `inference_hf.py`, greedy decoding) | 0.013 | 53 s (Apple M5 Max, MPS) | 10/10 |
+
+OmniLottie returned valid animations that do not depict the input (generic icons instead of the shapes shown). Caveats: it is a generative model that sees 8 sampled frames and is not designed for faithful reconstruction; it was run on Apple MPS (the repository is only tested on CUDA), which may affect its output. Per-GIF numbers: `results/compare-omnilottie.json`. Reproduce: `scripts/compare_omnilottie.py`.

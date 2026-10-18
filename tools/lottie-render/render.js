@@ -19,7 +19,8 @@ const { chromium } = require('playwright');
     const anim = lottie.loadAnimation({ container: document.getElementById('c'), renderer: 'canvas',
       loop: false, autoplay: false, animationData: JSON.parse(data),
       rendererSettings: { preserveAspectRatio: 'xMidYMid meet', clearCanvas: true } });
-    await new Promise(r => anim.addEventListener('DOMLoaded', r));
+    // With inline animationData, DOMLoaded can fire before we listen: check isLoaded, and never wait forever.
+    if (!anim.isLoaded) await Promise.race([new Promise(r => anim.addEventListener('DOMLoaded', r)), new Promise(r => setTimeout(r, 5000))]);
     const canvas = document.querySelector('canvas');
     const total = anim.totalFrames;
     const out = [];

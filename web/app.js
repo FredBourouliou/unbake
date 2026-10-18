@@ -67,7 +67,7 @@ function onScene(scene, frames) {
   baked.width = scene.width; baked.height = scene.height;
   $('scrub').max = scene.frames - 1;
   workspace.dataset.state = 'ready';
-  ['export-lottie', 'export-svg'].forEach(id => $(id).disabled = false);
+  ['export-lottie', 'export-svg', 'new'].forEach(id => $(id).disabled = false);
   const keys = scene.objects.reduce((n, o) => n + o.pos.length + o.rot.length + o.scale.length, 0);
   setStatus(`${scene.objects.length} objects, ${keys} keyframes, reconstructed in ${scene.seconds} s on this machine.`);
   renderList();
@@ -222,7 +222,7 @@ $('reset').onclick = () => {
   renderList(); renderInspector(); draw();
 };
 $('undo').onclick = undo;
-$('new').onclick = () => { stop(); state.scene = null; workspace.dataset.state = 'empty'; $('objects').replaceChildren(); $('inspector').hidden = true; ['export-lottie', 'export-svg', 'undo'].forEach(id => $(id).disabled = true); setStatus(workerReady ? 'Ready. Drop a GIF or pick a sample.' : ''); };
+$('new').onclick = () => { stop(); state.scene = null; workspace.dataset.state = 'empty'; $('objects').replaceChildren(); $('inspector').hidden = true; ['export-lottie', 'export-svg', 'undo', 'new'].forEach(id => $(id).disabled = true); setStatus(workerReady ? 'Ready. Drop a GIF or pick a sample.' : ''); };
 
 // Canvas interaction ----------------------------------------------------------------------
 function canvasPoint(e) {

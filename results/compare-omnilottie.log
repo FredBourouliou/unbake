@@ -1,0 +1,17 @@
+medium-10000: unbake IoU 0.932 (0.9s) | omnilottie IoU 0.013 (136s) 
+medium-10001: unbake IoU 0.955 (1.1s) | omnilottie IoU 0.011 (31s) 
+medium-10002: unbake IoU 0.941 (1.1s) | omnilottie IoU 0.015 (26s) 
+medium-10003: unbake IoU 0.956 (0.9s) | omnilottie IoU 0.002 (30s) 
+medium-10004: unbake IoU 0.938 (1.0s) | omnilottie IoU 0.024 (47s) 
+medium-10005: unbake IoU 0.877 (0.9s) | omnilottie IoU 0.031 (59s) 
+medium-10006: unbake IoU 0.945 (0.9s) | omnilottie IoU 0.000 (109s) 
+medium-10007: unbake IoU 0.934 (0.9s) | omnilottie IoU 0.015 (22s) 
+medium-10008: unbake IoU 0.938 (1.0s) | omnilottie IoU 0.006 (29s) 
+medium-10009: unbake IoU 0.920 (1.1s) | omnilottie IoU 0.011 (42s) 
+{
+  "unbake_iou": 0.9336262651830175,
+  "unbake_s": 0.9737607955932617,
+  "omnilottie_iou": 0.012755674179405544,
+  "omnilottie_s": 53.19128203392029,
+  "omnilottie_failures": 0
+}
