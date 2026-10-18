@@ -52,12 +52,55 @@ class Shape:
     hole: np.ndarray | list | None = None  # one polygon, a list of polygons, or None
     # One (x, y, rot, scale) row per frame.
     track: np.ndarray = field(default_factory=lambda: np.zeros((0, 4)))
+    # Strokes only (kind == "stroke"): `outer` is the centre line, drawn with this width.
+    width: float = 0.0
+    closed: bool = False
+    cap: str = "round"                      # "round" or "butt"
+    trim: np.ndarray | None = None          # per frame (start, end) as path fractions; start > end wraps a closed path
 
 
 def holes(shape: "Shape") -> list[np.ndarray]:
     if shape.hole is None:
         return []
     return list(shape.hole) if isinstance(shape.hole, list) else [shape.hole]
+
+
+def sub_path(points: np.ndarray, closed: bool, start: float, end: float) -> list[np.ndarray]:
+    """Pieces of a polyline between two arc-length fractions (a closed path may wrap)."""
+    pts = np.vstack([points, points[:1]]) if closed else points
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1)
+    cum = np.r_[0, np.cumsum(seg)]
+    total = cum[-1]
+    if total <= 0:
+        return []
+
+    def cut(a: float, b: float) -> np.ndarray:
+        sa, sb = a * total, b * total
+        inner = pts[(cum > sa) & (cum < sb)]
+        pa = np.array([np.interp(sa, cum, pts[:, 0]), np.interp(sa, cum, pts[:, 1])])
+        pb = np.array([np.interp(sb, cum, pts[:, 0]), np.interp(sb, cum, pts[:, 1])])
+        return np.vstack([pa, inner, pb])
+
+    start, end = float(np.clip(start, 0, 1)), float(np.clip(end, 0, 1))
+    if start <= end:
+        return [cut(start, end)] if end - start > 1e-4 else []
+    if not closed:
+        return []
+    return [cut(start, 1.0), cut(0.0, end)]
+
+
+def _draw_stroke(draw, shape: "Shape", frame: int, ss: int) -> None:
+    x, y, rot, scale = shape.track[frame]
+    start, end = shape.trim[frame]
+    if math.isnan(start):
+        return
+    line = transform(shape.outer, x, y, rot, scale) * ss
+    w = max(1.0, shape.width * scale * ss)
+    for piece in sub_path(line, shape.closed, start, end):
+        draw.line([tuple(p) for p in piece], fill=255, width=int(round(w)), joint="curve")
+        if shape.cap == "round":
+            for p in (piece[0], piece[-1]):
+                draw.ellipse([p[0] - w / 2, p[1] - w / 2, p[0] + w / 2, p[1] + w / 2], fill=255)
 
 
 def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
@@ -71,6 +114,10 @@ def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
             continue
         mask = Image.new("L", canvas.size, 0)
         draw = ImageDraw.Draw(mask)
+        if shape.kind == "stroke":
+            _draw_stroke(draw, shape, frame, SUPERSAMPLE)
+            canvas.paste(Image.new("RGB", canvas.size, shape.color), mask=mask)
+            continue
         outer = transform(shape.outer, x, y, rot, scale) * SUPERSAMPLE
         draw.polygon([tuple(p) for p in outer], fill=255)
         for hole_poly in holes(shape):

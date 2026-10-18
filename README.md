@@ -38,6 +38,20 @@ The hard set is reported but not part of the decision.
 
 **Correction logged on day 1 (holdout run):** the first holdout run crashed on `easy-10007` before printing any metric: the GIF encoder had merged identical consecutive frames and extended their duration, and the loader ignored durations. The loader now decodes at a constant frame rate using frame durations (needed for real-world GIFs anyway). No reconstruction logic was changed; the holdout set was then run once.
 
+## v0.2: animated strokes (stop criterion written before any detection code)
+
+New corpus level **strokes**: 1–3 constant-width strokes (circle loops, waves, zigzags; round or butt caps) that draw on, draw off, draw on then off, or spin like a loader, mixed with 0–2 rigid shapes. Ground truth: centre line, width, cap, per-frame visible interval. Dev seeds 0–29, holdout seeds 10 000–10 029.
+
+| Metric (strokes holdout) | Go if |
+|---|---|
+| Ground-truth strokes recovered as strokes | ≥ 90 % |
+| Mean IoU of each stroke rendered alone, ground truth vs reconstruction | ≥ 0.80 |
+| Mean region IoU, whole frame (as in v0.1) | ≥ 0.85 |
+
+Non-regression on the medium holdout: the four v0.1 thresholds still hold, and fewer than 5 % of medium samples get a (false) stroke.
+
+Then the 24 real animations are re-run and reported before/after, with no threshold.
+
 ## Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |

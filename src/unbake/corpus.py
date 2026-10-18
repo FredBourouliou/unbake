@@ -45,7 +45,76 @@ def _keyframed(rng, n_frames: int, n_keys: int, lo: float, hi: float) -> np.ndar
     return out
 
 
+def _stroke_path(rng) -> tuple[np.ndarray, bool]:
+    """Centre line of a stroke, centred on the origin: circle/arc loop, wave, or zigzag."""
+    kind = rng.choice(["circle", "wave", "zigzag"], p=[0.45, 0.35, 0.2])
+    if kind == "circle":
+        r = rng.uniform(28, 60)
+        a = np.linspace(0, 2 * math.pi, 160, endpoint=False)
+        return np.c_[np.cos(a), np.sin(a)] * r, True
+    length = rng.uniform(110, 190)
+    x = np.linspace(-length / 2, length / 2, 120)
+    if kind == "wave":
+        y = rng.uniform(12, 30) * np.sin(x / length * 2 * math.pi * rng.uniform(1, 2))
+    else:
+        y = np.interp(x, np.linspace(x[0], x[-1], 5), rng.uniform(-30, 30, 5))
+    return np.c_[x, y], False
+
+
+def _trim(rng, n: int, closed: bool) -> np.ndarray:
+    """Per-frame (start, end): draw on, draw off, draw on then off, or a spinning loader."""
+    t = np.linspace(0, 1, n)
+    ease = 0.5 - 0.5 * np.cos(np.pi * t)
+    styles = ["on", "off", "onoff"] + (["loader"] if closed else [])
+    style = rng.choice(styles)
+    if style == "on":
+        return np.c_[np.zeros(n), np.clip(ease * 1.15, 0, 1)]
+    if style == "off":
+        return np.c_[np.clip(ease * 1.15, 0, 1) * 0.999, np.ones(n)]
+    if style == "onoff":
+        a = np.clip(t * 2, 0, 1)
+        b = np.clip(t * 2 - 1, 0, 1)
+        return np.c_[0.5 - 0.5 * np.cos(np.pi * b), 0.5 - 0.5 * np.cos(np.pi * a)]
+    # Loader: a gap that grows and shrinks while the arc spins around the loop.
+    spin = (t * rng.uniform(1.0, 2.0)) % 1.0
+    length = 0.2 + 0.55 * (0.5 - 0.5 * np.cos(2 * np.pi * t))
+    return np.c_[spin, (spin + length) % 1.0]
+
+
+def make_stroke_sample(seed: int) -> dict:
+    """1-3 animated strokes, plus 0-2 rigid shapes so both models coexist."""
+    rng = np.random.default_rng(seed)
+    n_frames = int(rng.integers(36, 61))
+    background = (250, 248, 244) if rng.random() < 0.7 else (24, 26, 32)
+    used, shapes = set(), []
+
+    def colour():
+        c = next(PALETTE[i] for i in rng.permutation(len(PALETTE))
+                 if PALETTE[i] not in used and sum(abs(a - b) for a, b in zip(PALETTE[i], background)) >= 60)
+        used.add(c)
+        return c
+
+    for _ in range(int(rng.integers(0, 3))):
+        kind = str(rng.choice(KINDS))
+        outer, hole = outline(kind, float(rng.uniform(14, 24)), float(rng.uniform(0.45, 0.8)))
+        n_keys = int(rng.integers(2, 4))
+        tr = np.c_[_keyframed(rng, n_frames, n_keys, 40, SIZE[0] - 40), _keyframed(rng, n_frames, n_keys, 40, SIZE[1] - 40),
+                   _keyframed(rng, n_frames, n_keys, -180, 180), np.ones(n_frames)]
+        shapes.append(Shape(kind, colour(), outer, hole, tr))
+    for _ in range(int(rng.integers(1, 4))):
+        line, closed = _stroke_path(rng)
+        cx, cy = rng.uniform(70, SIZE[0] - 70), rng.uniform(70, SIZE[1] - 70)
+        tr = np.tile([cx, cy, float(rng.uniform(0, 360)), 1.0], (n_frames, 1))
+        shapes.append(Shape("stroke", colour(), line, None, tr, width=float(rng.uniform(4, 10)), closed=closed,
+                            cap=str(rng.choice(["round", "butt"])), trim=_trim(rng, n_frames, closed)))
+    frames = render(shapes, n_frames, SIZE, background)
+    return {"level": "strokes", "seed": seed, "background": background, "frames": frames,
+            "shapes": shapes, "dither": True, "n_frames": n_frames}
+
+
 def make_sample(level: str, seed: int) -> dict:
+    if level == "strokes":
+        return make_stroke_sample(seed)
     rng = np.random.default_rng(seed)
     lo, hi, overlap, close, dither = LEVELS[level]
     n_shapes = int(rng.integers(lo, hi + 1))
@@ -96,7 +165,9 @@ def save_sample(sample: dict, out_dir: Path) -> Path:
         "background": sample["background"], "n_frames": sample["n_frames"],
         "shapes": [{"kind": s.kind, "color": s.color, "outer": s.outer.round(3).tolist(),
                     "hole": None if s.hole is None else s.hole.round(3).tolist(),
-                    "track": s.track.round(3).tolist()} for s in sample["shapes"]],
+                    "track": s.track.round(3).tolist(),
+                    **({"width": s.width, "closed": s.closed, "cap": s.cap, "trim": s.trim.round(4).tolist()}
+                       if s.kind == "stroke" else {})} for s in sample["shapes"]],
     }
     (out_dir / f"{name}.json").write_text(json.dumps(truth))
     return gif
@@ -115,7 +186,7 @@ def build(root: Path, per_level: dict[str, int], holdout: bool) -> list[Path]:
 if __name__ == "__main__":
     import sys
     root = Path(sys.argv[1] if len(sys.argv) > 1 else "data")
-    counts = {"easy": 20, "medium": 20, "hard": 10}
+    counts = {"easy": 20, "medium": 20, "hard": 10, "strokes": 30}
     build(root, counts, holdout=False)
     build(root, counts, holdout=True)
     print(f"corpus written to {root}")
