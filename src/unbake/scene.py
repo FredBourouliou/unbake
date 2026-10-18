@@ -57,6 +57,8 @@ class Shape:
     closed: bool = False
     cap: str = "round"                      # "round" or "butt"
     trim: np.ndarray | None = None          # per frame (start, end) as path fractions; start > end wraps a closed path
+    # Linear gradient fill, in local coordinates: (p0, p1, colour0, colour1). `color` is then its mean.
+    gradient: tuple | None = None
 
 
 def holes(shape: "Shape") -> list[np.ndarray]:
@@ -123,8 +125,28 @@ def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
         for hole_poly in holes(shape):
             hole = transform(hole_poly, x, y, rot, scale) * SUPERSAMPLE
             draw.polygon([tuple(p) for p in hole], fill=0)
-        canvas.paste(Image.new("RGB", canvas.size, shape.color), mask=mask)
+        fill = _gradient_fill(shape, frame, canvas.size, mask) if shape.gradient else Image.new("RGB", canvas.size, shape.color)
+        canvas.paste(fill, mask=mask)
     return np.asarray(canvas.resize((w, h), Image.LANCZOS))
+
+
+def _gradient_fill(shape: Shape, frame: int, size: tuple[int, int], mask: Image.Image) -> Image.Image:
+    """The shape's linear gradient, evaluated over its bounding box (it moves with the shape)."""
+    x, y, rot, scale = shape.track[frame]
+    p0, p1, c0, c1 = (np.asarray(v, float) for v in shape.gradient)
+    out = np.zeros((size[1], size[0], 3), np.uint8)
+    box = mask.getbbox()
+    if box is None:
+        return Image.fromarray(out)
+    l, t, r, b = box
+    X, Y = np.meshgrid((np.arange(l, r) + 0.5) / SUPERSAMPLE, (np.arange(t, b) + 0.5) / SUPERSAMPLE)
+    c, s = math.cos(math.radians(rot)), math.sin(math.radians(rot))
+    q = np.stack([X - x, Y - y], -1) / scale
+    local = q @ np.array([[c, s], [-s, c]]).T  # inverse of transform()
+    d = p1 - p0
+    u = np.clip(((local - p0) @ d) / max(float(d @ d), 1e-9), 0, 1)
+    out[t:b, l:r] = np.rint(c0 + (c1 - c0) * u[..., None]).astype(np.uint8)
+    return Image.fromarray(out)
 
 
 def render(shapes: list[Shape], n_frames: int, size: tuple[int, int],

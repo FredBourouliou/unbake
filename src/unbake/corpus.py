@@ -112,9 +112,49 @@ def make_stroke_sample(seed: int) -> dict:
             "shapes": shapes, "dither": True, "n_frames": n_frames}
 
 
+def make_gradient_sample(seed: int) -> dict:
+    """2-4 overlapping shapes, about half filled with a two-colour linear gradient, dithered."""
+    rng = np.random.default_rng(seed)
+    n_frames = int(rng.integers(36, 61))
+    background = (250, 248, 244) if rng.random() < 0.7 else (24, 26, 32)
+    used, shapes = set(), []
+
+    def colour():
+        c = next(PALETTE[i] for i in rng.permutation(len(PALETTE))
+                 if PALETTE[i] not in used and sum(abs(a - b) for a, b in zip(PALETTE[i], background)) >= 60)
+        used.add(c)
+        return c
+
+    n_shapes = int(rng.integers(2, 5))
+    flags = rng.random(n_shapes) < 0.5
+    flags[rng.integers(n_shapes)] = True  # at least one gradient per sample
+    for grad in flags:
+        kind = str(rng.choice([k for k in KINDS if k != "ring"] if grad else KINDS))
+        size = float(rng.uniform(18, 32))
+        outer, hole = outline(kind, size, float(rng.uniform(0.5, 0.8)))
+        n_keys = int(rng.integers(2, 5))
+        tr = np.c_[_keyframed(rng, n_frames, n_keys, 45, SIZE[0] - 45), _keyframed(rng, n_frames, n_keys, 45, SIZE[1] - 45),
+                   _keyframed(rng, n_frames, n_keys, -180, 180) if rng.random() < 0.8 else np.zeros(n_frames),
+                   _keyframed(rng, n_frames, n_keys, 0.8, 1.2) if rng.random() < 0.5 else np.ones(n_frames)]
+        if grad:
+            a = rng.uniform(0, 2 * math.pi)
+            d = np.array([math.cos(a), math.sin(a)]) * size
+            c0, c1 = colour(), colour()
+            gradient = (-d, d, c0, c1)
+            col = tuple(int(round((p + q) / 2)) for p, q in zip(c0, c1))
+            shapes.append(Shape(kind, col, outer, hole, tr, gradient=gradient))
+        else:
+            shapes.append(Shape(kind, colour(), outer, hole, tr))
+    frames = render(shapes, n_frames, SIZE, background)
+    return {"level": "gradients", "seed": seed, "background": background, "frames": frames,
+            "shapes": shapes, "dither": True, "n_frames": n_frames}
+
+
 def make_sample(level: str, seed: int) -> dict:
     if level == "strokes":
         return make_stroke_sample(seed)
+    if level == "gradients":
+        return make_gradient_sample(seed)
     rng = np.random.default_rng(seed)
     lo, hi, overlap, close, dither = LEVELS[level]
     n_shapes = int(rng.integers(lo, hi + 1))
@@ -167,7 +207,10 @@ def save_sample(sample: dict, out_dir: Path) -> Path:
                     "hole": None if s.hole is None else s.hole.round(3).tolist(),
                     "track": s.track.round(3).tolist(),
                     **({"width": s.width, "closed": s.closed, "cap": s.cap, "trim": s.trim.round(4).tolist()}
-                       if s.kind == "stroke" else {})} for s in sample["shapes"]],
+                       if s.kind == "stroke" else {}),
+                    **({"gradient": [np.round(s.gradient[0], 3).tolist(), np.round(s.gradient[1], 3).tolist(),
+                                     list(s.gradient[2]), list(s.gradient[3])]} if s.gradient else {})}
+                   for s in sample["shapes"]],
     }
     (out_dir / f"{name}.json").write_text(json.dumps(truth))
     return gif

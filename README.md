@@ -112,6 +112,20 @@ The one v0.2 criterion never met: a rigid shape occasionally comes back as a str
 
 Non-regression on the same 200 medium samples: the four v0.1 thresholds still hold. The 24 real animations are re-run and reported before/after.
 
+### v0.4: gradient fills (criterion written before the reconstruction code)
+
+A new corpus level, **gradients**: 2–4 overlapping shapes, about half of them (at least one per sample) filled with a two-colour linear gradient that moves and turns with the shape, dithered GIFs. Today such a shape comes back as two or three flat fragments: on 40 dev samples, **0 % of gradient shapes** are recovered as one gradient object, identity 85.6 %, mean foreground colour error 9.5 / 255 (`scripts/evaluate_gradients.py`).
+
+| Metric (gradients level) | Go if |
+|---|---|
+| Gradient shapes recovered as one object with a gradient fill | ≥ 90 % |
+| Identity, all shapes (as in v0.1) | ≥ 90 % |
+| Median position error | ≤ 2 px |
+| Mean colour error on the foreground, ground truth vs reconstruction, both undithered | ≤ 4 / 255 |
+| Lottie export rendered by lottie-web vs the reconstruction's own render, foreground | ≤ 4 / 255 |
+
+Non-regression: medium samples given a gradient by mistake ≤ 5 %, and the four v0.1 thresholds on medium still hold. Measured on dev while developing, then once on a fresh holdout (seeds 50 000+: 60 gradients, 100 medium).
+
 ### Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |
