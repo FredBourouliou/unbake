@@ -420,8 +420,12 @@ def reconstruct(path: str) -> dict:
     frames = load_frames(path)
     background, colours = find_palette(frames)
     labels = label_frames(frames, background, colours)
-    tracks = track_objects(labels)
-    objects = [fit_track(tr, labels, colours) for tr in tracks]
-    shapes = to_shapes(objects, labels, len(frames))
+    from .strokes import detect_strokes
+    strokes, consumed = detect_strokes(labels, colours)
+    rigid_labels = labels.copy()
+    rigid_labels[consumed] = 0
+    tracks = track_objects(rigid_labels)
+    objects = [fit_track(tr, rigid_labels, colours) for tr in tracks]
+    shapes = to_shapes(objects, rigid_labels, len(frames)) + strokes
     return {"frames": frames, "background": tuple(int(c) for c in background), "colours": colours,
             "labels": labels, "objects": objects, "shapes": shapes}
