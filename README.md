@@ -26,7 +26,7 @@ Run the editor locally: `./scripts/build_web.sh && python3 -m http.server -d web
 1. **Palette.** Background and dominant colours; every pixel labelled, ignoring dithering and antialiasing blends.
 2. **Strokes.** Over the whole animation, a line that draws itself only ever covers its own path: a thin region whose area changes. Its skeleton gives the centre line (refined to sub-pixel), the distance to the edges gives the width, and each frame gives the visible interval along the path.
 3. **Rigid objects.** Connected regions per colour, linked across frames, pieces cut by an occluder joined back. Each object's clearest view becomes a template fitted on every frame for position, rotation and scale; pixels hidden by another object are not counted against it.
-4. **Keyframes.** Per-frame values reduced with Ramer–Douglas–Peucker; this is what the editor edits and what the exports play (Lottie trim paths for strokes).
+4. **Keyframes.** Each channel is split at its extrema, then wherever one cubic-Bézier easing curve cannot follow it; this is what the editor edits and what the exports play (native Lottie easing, SVG keySplines, trim paths for strokes).
 
 ## How it was built and measured
 
@@ -96,6 +96,8 @@ Keyframes are currently joined by straight lines, so a bouncing ball needs a key
 | Region IoU of the Lottie export rendered by lottie-web, relative to v0.2 | drop ≤ 0.01 |
 
 Measured on dev while developing, then once on a fresh holdout (seeds 30 000+: 20 medium, 20 strokes).
+
+**Result on the fresh holdout (run once, commit `d379c72`): go.** Keyframes 6 602 → 2 825 (**43 %** of v0.2), Lottie region IoU 0.896 → 0.898 (no drop; slightly better). Dev set: 42 %, +0.002. The bouncing-ball sample goes from 137 to 54 keyframes in total; the ball's vertical motion from 47 keys to 10, one per bounce extreme.
 
 ### Results (holdout, run once, commit `e34f877`)
 
