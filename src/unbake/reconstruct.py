@@ -154,9 +154,11 @@ def track_objects(labels: np.ndarray) -> list[Track]:
                 if c in used:
                     continue
                 # A small extra piece near an existing object is a fragment cut by an occluder.
+                # A piece near an object joins it when an occluder cut it off, or when it is a
+                # crumb (< 10 % of the object) split off by dithering.
                 near = [tr for tr in live if t in tr.frames and o[2] < 0.9 * _size(tr) and
                         np.linalg.norm(tr.centroid(t) - o[1]) < max(12.0, 1.2 * tr.radius()) and
-                        _split_by_occluder(tr.frames[t], o[0], lab)]
+                        (o[2] < 0.1 * _size(tr) or _split_by_occluder(tr.frames[t], o[0], lab))]
                 if near:
                     near[0].frames[t] = near[0].frames[t] | o[0]
                 else:
@@ -202,7 +204,7 @@ def merge_tracks(tracks: list[Track], labels: np.ndarray) -> list[Track]:
             for j, b in enumerate(tracks):
                 if i == j or a.colour != b.colour:
                     continue
-                if _is_continuation(a, b) or _is_fragment(b, a, labels):
+                if _is_continuation(a, b) or _is_duplicate(a, b) or _is_fragment(b, a, labels):
                     for t, m in b.frames.items():
                         a.frames[t] = a.frames[t] | m if t in a.frames else m
                     tracks.pop(j)
@@ -225,6 +227,15 @@ def _is_continuation(a: Track, b: Track) -> bool:
     if not 0.25 < _size(b) / _size(a) < 4.0:
         return False
     return np.linalg.norm(a.centroid(a_end) - b.centroid(b_start)) < GATE + 6 * gap
+
+
+def _is_duplicate(a: Track, b: Track) -> bool:
+    """Two tracks that sit on the same spot whenever both exist are one object split by noise."""
+    common = sorted(set(a.frames) & set(b.frames))
+    if not common or len(common) > 0.5 * min(len(a.frames), len(b.frames)):
+        return False
+    radius = 0.5 * max(a.radius(), b.radius())
+    return all(np.linalg.norm(a.centroid(t) - b.centroid(t)) < radius for t in common)
 
 
 def _is_fragment(small: Track, big: Track, labels: np.ndarray) -> bool:
@@ -416,16 +427,48 @@ def _z_order(shapes, objects, labels):
     return [shapes[i] for i in np.argsort(wins, kind="stable")]
 
 
+ANALYSIS_SIZE = 320  # thresholds are tuned in pixels at this scale
+
+
+def _downscale(frames: np.ndarray) -> tuple[np.ndarray, float]:
+    """Analyse large GIFs at ANALYSIS_SIZE (longest side): faster, and the pixel thresholds hold."""
+    h, w = frames.shape[1:3]
+    factor = min(1.0, ANALYSIS_SIZE / max(h, w))
+    if factor >= 1.0:
+        return frames, 1.0
+    size = (max(1, round(w * factor)), max(1, round(h * factor)))
+    small = np.stack([cv2.resize(f, size, interpolation=cv2.INTER_AREA) for f in frames])
+    return small, factor
+
+
+def _upscale(shapes: list[Shape], factor: float) -> list[Shape]:
+    """Bring geometry measured on the reduced frames back to the input's pixel size."""
+    if factor == 1.0:
+        return shapes
+    k = 1.0 / factor
+    for s in shapes:
+        s.outer = s.outer * k
+        if s.hole is not None:
+            s.hole = [h * k for h in s.hole] if isinstance(s.hole, list) else s.hole * k
+        s.track = s.track.copy()
+        s.track[:, :2] *= k
+        if s.kind == "stroke":
+            s.width *= k
+    return shapes
+
+
 def reconstruct(path: str) -> dict:
+    """Reconstruct a GIF. Shapes are in the input's pixel coordinates; `labels` are at analysis scale."""
     frames = load_frames(path)
-    background, colours = find_palette(frames)
-    labels = label_frames(frames, background, colours)
+    small, factor = _downscale(frames)
+    background, colours = find_palette(small)
+    labels = label_frames(small, background, colours)
     from .strokes import detect_strokes
     strokes, consumed = detect_strokes(labels, colours)
     rigid_labels = labels.copy()
     rigid_labels[consumed] = 0
     tracks = track_objects(rigid_labels)
     objects = [fit_track(tr, rigid_labels, colours) for tr in tracks]
-    shapes = to_shapes(objects, rigid_labels, len(frames)) + strokes
+    shapes = _upscale(to_shapes(objects, rigid_labels, len(frames)) + strokes, factor)
     return {"frames": frames, "background": tuple(int(c) for c in background), "colours": colours,
-            "labels": labels, "objects": objects, "shapes": shapes}
+            "labels": labels, "objects": objects, "shapes": shapes, "analysis_scale": factor}

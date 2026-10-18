@@ -2,7 +2,7 @@
   "summary": {
     "animations": 24,
     "crashes": 0,
-    "mean_iou": 0.8042471413662615,
+    "mean_iou": 0.799265452444068,
     "iou_ge_0.9": 8,
     "iou_0.7_0.9": 11,
     "iou_lt_0.7": 5
@@ -25,7 +25,7 @@
       "objects": 2,
       "iou": 0.7492983644297032,
       "keyframes": 93,
-      "seconds": 0.96,
+      "seconds": 0.97,
       "foreground_share": 0.017
     },
     {
@@ -35,7 +35,7 @@
       "objects": 12,
       "iou": 0.8184900317881404,
       "keyframes": 330,
-      "seconds": 0.91,
+      "seconds": 0.95,
       "foreground_share": 0.027
     },
     {
@@ -45,7 +45,7 @@
       "objects": 2,
       "iou": 0.5583727808914511,
       "keyframes": 234,
-      "seconds": 2.41,
+      "seconds": 2.47,
       "foreground_share": 0.489
     },
     {
@@ -65,7 +65,7 @@
       "objects": 4,
       "iou": 0.7855345250811087,
       "keyframes": 425,
-      "seconds": 0.82,
+      "seconds": 0.84,
       "foreground_share": 0.01
     },
     {
@@ -75,7 +75,7 @@
       "objects": 4,
       "iou": 0.8084732548681207,
       "keyframes": 147,
-      "seconds": 1.32,
+      "seconds": 1.34,
       "foreground_share": 0.322
     },
     {
@@ -85,7 +85,7 @@
       "objects": 3,
       "iou": 0.954396920261599,
       "keyframes": 188,
-      "seconds": 1.12,
+      "seconds": 1.13,
       "foreground_share": 0.177
     },
     {
@@ -95,7 +95,7 @@
       "objects": 12,
       "iou": 0.5739685732301913,
       "keyframes": 514,
-      "seconds": 4.5,
+      "seconds": 4.53,
       "foreground_share": 0.053
     },
     {
@@ -105,7 +105,7 @@
       "objects": 5,
       "iou": 0.6278566283948877,
       "keyframes": 229,
-      "seconds": 2.44,
+      "seconds": 2.5,
       "foreground_share": 0.003
     },
     {
@@ -115,7 +115,7 @@
       "objects": 2,
       "iou": 0.9157925772107918,
       "keyframes": 59,
-      "seconds": 0.58,
+      "seconds": 0.6,
       "foreground_share": 0.004
     },
     {
@@ -125,7 +125,7 @@
       "objects": 1,
       "iou": 0.8644752796819467,
       "keyframes": 54,
-      "seconds": 0.92,
+      "seconds": 0.93,
       "foreground_share": 0.011
     },
     {
@@ -135,7 +135,7 @@
       "objects": 10,
       "iou": 0.3012831315069676,
       "keyframes": 170,
-      "seconds": 0.92,
+      "seconds": 0.97,
       "foreground_share": 0.026
     },
     {
@@ -145,7 +145,7 @@
       "objects": 6,
       "iou": 0.8276900275118574,
       "keyframes": 145,
-      "seconds": 0.89,
+      "seconds": 0.92,
       "foreground_share": 0.018
     },
     {
@@ -155,7 +155,7 @@
       "objects": 2,
       "iou": 0.9360617645032702,
       "keyframes": 27,
-      "seconds": 1.68,
+      "seconds": 1.77,
       "foreground_share": 0.127
     },
     {
@@ -165,7 +165,7 @@
       "objects": 7,
       "iou": 0.7653835809563263,
       "keyframes": 242,
-      "seconds": 0.77,
+      "seconds": 0.78,
       "foreground_share": 0.01
     },
     {
@@ -175,7 +175,7 @@
       "objects": 2,
       "iou": 0.8651264653875368,
       "keyframes": 20,
-      "seconds": 0.74,
+      "seconds": 0.75,
       "foreground_share": 0.048
     },
     {
@@ -185,7 +185,7 @@
       "objects": 3,
       "iou": 0.9206857252705004,
       "keyframes": 30,
-      "seconds": 0.45,
+      "seconds": 0.47,
       "foreground_share": 0.005
     },
     {
@@ -195,17 +195,17 @@
       "objects": 1,
       "iou": 0.9117239149837028,
       "keyframes": 68,
-      "seconds": 0.6,
+      "seconds": 0.62,
       "foreground_share": 0.015
     },
     {
       "name": "switch_loop",
       "frames": 48,
       "colours": 3,
-      "objects": 7,
-      "iou": 0.8889761298769345,
-      "keyframes": 91,
-      "seconds": 1.14,
+      "objects": 5,
+      "iou": 0.7899435049240213,
+      "keyframes": 65,
+      "seconds": 1.28,
       "foreground_share": 0.252
     },
     {
@@ -215,17 +215,17 @@
       "objects": 9,
       "iou": 0.9449766246896761,
       "keyframes": 79,
-      "seconds": 0.96,
+      "seconds": 0.98,
       "foreground_share": 0.026
     },
     {
       "name": "trail_loading",
       "frames": 74,
       "colours": 1,
-      "objects": 4,
-      "iou": 0.6478421719694883,
-      "keyframes": 410,
-      "seconds": 0.85,
+      "objects": 3,
+      "iou": 0.6273142627897556,
+      "keyframes": 335,
+      "seconds": 1.03,
       "foreground_share": 0.013
     },
     {
@@ -235,7 +235,7 @@
       "objects": 9,
       "iou": 0.8770566536043172,
       "keyframes": 166,
-      "seconds": 3.29,
+      "seconds": 3.34,
       "foreground_share": 0.453
     },
     {
@@ -245,7 +245,7 @@
       "objects": 6,
       "iou": 0.9338033791050788,
       "keyframes": 180,
-      "seconds": 0.98,
+      "seconds": 1.19,
       "foreground_share": 0.051
     }
   ]
