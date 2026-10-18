@@ -1,14 +1,14 @@
 // Runs the Python reconstruction in the browser with Pyodide. Nothing leaves the machine.
 import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs';
 
-const MODULES = ['__init__.py', 'scene.py', 'reconstruct.py', 'export.py', 'web_api.py'];
+const MODULES = ['__init__.py', 'scene.py', 'reconstruct.py', 'strokes.py', 'export.py', 'web_api.py'];
 let pyodide;
 
 async function init() {
   postMessage({ type: 'status', text: 'Loading Python…' });
   pyodide = await loadPyodide();
-  postMessage({ type: 'status', text: 'Loading NumPy, SciPy, OpenCV, Pillow…' });
-  await pyodide.loadPackage(['numpy', 'scipy', 'opencv-python', 'pillow']);
+  postMessage({ type: 'status', text: 'Loading NumPy, SciPy, OpenCV, scikit-image…' });
+  await pyodide.loadPackage(['numpy', 'scipy', 'opencv-python', 'pillow', 'scikit-image']);
   pyodide.FS.mkdirTree('/app/unbake');
   for (const name of MODULES) {
     const src = await (await fetch(`py/unbake/${name}`)).text();

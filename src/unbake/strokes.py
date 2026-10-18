@@ -51,6 +51,9 @@ def detect_strokes(labels: np.ndarray, colours: np.ndarray) -> tuple[list[Shape]
             path, closed = order_skeleton(skel, width)
             if path is None or len(path) < 8:
                 continue
+            # A branched line drawing (an outlined icon) is not one stroke: leave it to the rigid model.
+            if len(path) < 0.75 * skel.sum():
+                continue
             line = _smooth_resample(path, closed)
             line, width = _refine_centre(line, closed, region, width)
             raw = _visible_intervals(line, closed, on & region[None], width)

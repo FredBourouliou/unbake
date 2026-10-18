@@ -88,6 +88,16 @@ Mean IoU 0.72 (it penalises thin strokes and small objects heavily: several "fai
 
 **Fixed after this test:** outlines with several holes (line icons were filled in), and same-colour nested parts being merged (a fragment is now joined to an object only when another object, not background, separates them). Synthetic dev scores unchanged within noise.
 
+**Real-world re-run with v0.2 (same 24 animations):** mean IoU 0.72 → **0.80**.
+
+| Visual verdict | v0.1 | v0.2 |
+|---|---|---|
+| Faithful | 14 | **18** (+ material_loader, play_button, colorline, loading_semicircle) |
+| Partial | 4 | 3 (toggle_switch colour, switch_loop extra object, simple_loader missing dot) |
+| Fails | 6 | 3 (clock hands, infinite_rainbow gradient stroke, trail_loading particles) |
+
+Biggest gains: material_loader 0.33 → 0.86, play_button 0.59 → 0.94, colorline 0.34 → 0.85. A branched outline icon (medal) is now explicitly left to the rigid model (a stroke must be one simple path covering ≥ 75 % of its skeleton).
+
 ## Comparison
 
 OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach. Both tools were run on the first 10 medium holdout GIFs; both outputs are Lottie JSON rendered by lottie-web at the input's size and frame count, composited on the input background, and scored with the same per-colour-region IoU.

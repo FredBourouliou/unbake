@@ -126,6 +126,7 @@ a:hover { text-decoration-color: var(--accent); }
 
 /* Inspector */
 .field { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); }
+.field input[type=range] { width: 140px; accent-color: var(--accent); }
 .field input[type=color] { width: 44px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; }
 .facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: var(--s1) var(--s4); color: var(--text-dim); }
 .facts dd { margin: 0; color: var(--text); text-align: right; }

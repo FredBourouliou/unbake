@@ -68,7 +68,7 @@ function onScene(scene, frames) {
   $('scrub').max = scene.frames - 1;
   workspace.dataset.state = 'ready';
   ['export-lottie', 'export-svg', 'new'].forEach(id => $(id).disabled = false);
-  const keys = scene.objects.reduce((n, o) => n + o.pos.length + o.rot.length + o.scale.length, 0);
+  const keys = scene.objects.reduce((n, o) => n + (o.kind === 'stroke' ? o.start.length + o.len.length : o.pos.length + o.rot.length + o.scale.length), 0);
   setStatus(`${scene.objects.length} objects, ${keys} keyframes, reconstructed in ${scene.seconds} s on this machine.`);
   renderList();
   renderInspector();
@@ -87,6 +87,48 @@ function lerpKeys(keys, f, dims) {
       return Array.from({ length: dims }, (_, d) => a[d + 1] + (b[d + 1] - a[d + 1]) * t);
     }
   }
+}
+
+function trimAt(o, f) {
+  if (o.hidden || f < o.span[0] || f > o.span[1]) return null;
+  const [start] = lerpKeys(o.start, f, 1);
+  const [len] = lerpKeys(o.len, f, 1);
+  return { start, len };
+}
+
+// Pieces of a polyline between arc-length fractions; a closed path may wrap.
+function subPath(points, closed, start, len) {
+  const pts = closed ? [...points, points[0]] : points;
+  const cum = [0];
+  for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const total = cum[cum.length - 1];
+  const at = (s) => {
+    let i = 1; while (i < cum.length - 1 && cum[i] < s) i++;
+    const t = (s - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
+    return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * t, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * t];
+  };
+  const cut = (a, b) => [at(a * total), ...pts.filter((_, i) => cum[i] > a * total && cum[i] < b * total), at(b * total)];
+  if (len >= 0.999) return [closed ? [...points, points[0]] : points];
+  if (len <= 1e-4) return [];
+  if (!closed) return [cut(Math.max(0, start), Math.min(1, start + len))];
+  const s0 = ((start % 1) + 1) % 1, e0 = s0 + len;
+  return e0 <= 1 ? [cut(s0, e0)] : [cut(s0, 1), cut(0, e0 - 1)];
+}
+
+function strokePath(points, S) {
+  const path = new Path2D();
+  points.forEach(([x, y], i) => i ? path.lineTo(x * S, y * S) : path.moveTo(x * S, y * S));
+  return path;
+}
+
+function drawStroke(o, f, ctx) {
+  const tr = trimAt(o, f);
+  if (!tr) return;
+  const S = scale();
+  ctx.save();
+  ctx.strokeStyle = o.color; ctx.lineWidth = o.width * S; ctx.lineCap = o.cap === 'round' ? 'round' : 'butt'; ctx.lineJoin = 'round';
+  for (const piece of subPath(o.line, o.closed, tr.start, tr.len)) ctx.stroke(strokePath(piece, S));
+  ctx.restore();
 }
 
 function params(o, f) {
@@ -127,6 +169,7 @@ function draw() {
   uctx.fillStyle = sc.background;
   uctx.fillRect(0, 0, unbaked.width, unbaked.height);
   for (const o of sc.objects) {
+    if (o.kind === 'stroke') { drawStroke(o, f, uctx); continue; }
     const p = params(o, f);
     if (!p) continue;
     uctx.fillStyle = o.color;
@@ -140,6 +183,13 @@ function draw() {
 
 function drawSelection(o, f) {
   const S = scale(), accent = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+  if (o.kind === 'stroke') {
+    uctx.save();
+    uctx.strokeStyle = accent; uctx.globalAlpha = 0.8; uctx.lineWidth = 1.5; uctx.setLineDash([4, 4]);
+    uctx.stroke(strokePath(o.closed ? [...o.line, o.line[0]] : o.line, S));
+    uctx.restore();
+    return;
+  }
   uctx.save();
   // Motion path over the visible span.
   uctx.beginPath();
@@ -170,8 +220,9 @@ function renderList() {
     b.className = 'obj' + (o.hidden ? ' is-hidden' : '');
     b.setAttribute('aria-pressed', String(o.id === state.selected));
     const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = o.color;
-    const name = document.createElement('span'); name.textContent = `Object ${o.id + 1}`;
-    const meta = document.createElement('span'); meta.className = 'mono'; meta.textContent = `${o.pos.length} keys`;
+    const name = document.createElement('span'); name.textContent = `${o.kind === 'stroke' ? 'Stroke' : 'Object'} ${o.id + 1}`;
+    const meta = document.createElement('span'); meta.className = 'mono';
+    meta.textContent = `${o.kind === 'stroke' ? o.start.length + o.len.length : o.pos.length} keys`;
     b.append(sw, name, meta);
     b.onclick = () => select(o.id === state.selected ? null : o.id);
     li.append(b); ul.append(li);
@@ -184,8 +235,16 @@ function renderInspector() {
   if (!o) return;
   $('color').value = o.color;
   $('toggle-visible').textContent = o.hidden ? 'Show' : 'Hide';
-  const facts = [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['position keys', o.pos.length],
-                 ['rotation keys', o.rot.length], ['scale keys', o.scale.length], ['colour', o.color]];
+  $('width-field').hidden = o.kind !== 'stroke';
+  $('hint').textContent = o.kind === 'stroke'
+    ? 'An animated stroke: it draws itself along this path. Drag it to move it, change its colour or width.'
+    : 'Drag a handle to move a keyframe. Drag the object to move it, with its whole path.';
+  if (o.kind === 'stroke') { $('width').value = o.width; $('width-out').textContent = o.width.toFixed(1); }
+  const facts = o.kind === 'stroke'
+    ? [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['path', o.closed ? 'closed loop' : 'open'],
+       ['caps', o.cap], ['start keys', o.start.length], ['length keys', o.len.length], ['colour', o.color]]
+    : [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['position keys', o.pos.length],
+       ['rotation keys', o.rot.length], ['scale keys', o.scale.length], ['colour', o.color]];
   $('facts').replaceChildren();
   for (const [k, v] of facts) {
     const dt = document.createElement('dt'); dt.textContent = k;
@@ -213,6 +272,8 @@ $('color').addEventListener('pointerdown', () => remember());
 $('color').addEventListener('keydown', () => remember(), { once: false });
 $('color').oninput = (e) => { const o = selectedObject(); if (o) { o.color = e.target.value; renderList(); draw(); } };
 $('color').onchange = () => renderInspector();
+$('width').addEventListener('pointerdown', () => remember());
+$('width').oninput = (e) => { const o = selectedObject(); if (o && o.kind === 'stroke') { o.width = +e.target.value; $('width-out').textContent = o.width.toFixed(1); draw(); } };
 $('toggle-visible').onclick = () => { const o = selectedObject(); if (!o) return; remember(); o.hidden = !o.hidden; renderList(); renderInspector(); draw(); };
 $('reset').onclick = () => {
   const o = selectedObject(); if (!o) return; remember();
@@ -231,12 +292,20 @@ function canvasPoint(e) {
 
 function hit(pt) {
   const S = scale(), sel = selectedObject();
-  if (sel) {
+  if (sel && sel.kind !== 'stroke') {
     const k = sel.pos.findIndex(([, x, y]) => Math.hypot(x * S - pt.x, y * S - pt.y) <= HANDLE_R + 3);
     if (k >= 0) return { kind: 'key', obj: sel, k };
   }
   const objs = [...state.scene.objects].reverse();
   for (const o of objs) {
+    if (o.kind === 'stroke') {
+      if (!trimAt(o, state.frame)) continue;
+      uctx.save(); uctx.lineWidth = Math.max(o.width * S, 12);
+      const onIt = uctx.isPointInStroke(strokePath(o.closed ? [...o.line, o.line[0]] : o.line, S), pt.x, pt.y);
+      uctx.restore();
+      if (onIt) return { kind: 'body', obj: o };
+      continue;
+    }
     const p = params(o, state.frame);
     if (p && uctx.isPointInPath(objectPath(o, p), pt.x, pt.y, 'evenodd')) return { kind: 'body', obj: o };
   }
@@ -249,7 +318,7 @@ unbaked.addEventListener('pointerdown', (e) => {
   if (!h) { select(null); return; }
   if (h.obj.id !== state.selected) select(h.obj.id);
   remember();
-  state.drag = { ...h, start: pt, keys: structuredClone(h.obj.pos) };
+  state.drag = { ...h, start: pt, keys: structuredClone(h.obj.kind === 'stroke' ? h.obj.line : h.obj.pos) };
   unbaked.setPointerCapture(e.pointerId);
   unbaked.classList.add('is-dragging');
 });
@@ -259,7 +328,9 @@ unbaked.addEventListener('pointermove', (e) => {
   if (!state.drag) { unbaked.classList.toggle('is-hover', !!hit(pt)); return; }
   const S = scale(), dx = (pt.x - state.drag.start.x) / S, dy = (pt.y - state.drag.start.y) / S;
   const o = state.drag.obj;
-  if (state.drag.kind === 'key') {
+  if (o.kind === 'stroke') {
+    o.line = state.drag.keys.map(([x, y]) => [+(x + dx).toFixed(2), +(y + dy).toFixed(2)]);
+  } else if (state.drag.kind === 'key') {
     const [f, x, y] = state.drag.keys[state.drag.k];
     o.pos[state.drag.k] = [f, +(x + dx).toFixed(2), +(y + dy).toFixed(2)];
   } else {
@@ -269,7 +340,8 @@ unbaked.addEventListener('pointermove', (e) => {
 });
 unbaked.addEventListener('pointerup', () => {
   if (!state.drag) return;
-  const moved = JSON.stringify(state.drag.keys) !== JSON.stringify(state.drag.obj.pos);
+  const o = state.drag.obj;
+  const moved = JSON.stringify(state.drag.keys) !== JSON.stringify(o.kind === 'stroke' ? o.line : o.pos);
   if (!moved) state.undo.pop();
   $('undo').disabled = !state.undo.length;
   state.drag = null;

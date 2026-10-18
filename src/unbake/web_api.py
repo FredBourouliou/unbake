@@ -14,7 +14,7 @@ import tempfile
 
 import numpy as np
 
-from .export import keyframes, to_lottie, to_svg
+from .export import keyframes, to_lottie, to_svg, trim_keys
 from .reconstruct import reconstruct
 from .scene import Shape, holes
 
@@ -27,6 +27,20 @@ def reconstruct_gif(data: bytes) -> dict:
     n, h, w = rec["frames"].shape[:3]
     objects = []
     for i, s in enumerate(rec["shapes"]):
+        if s.kind == "stroke":
+            visible, start, length, ks, kl = trim_keys(s)
+            at = {int(f): j for j, f in enumerate(visible)}
+            line = s.outer[:: max(1, len(s.outer) // 200)]
+            objects.append({
+                "id": i, "kind": "stroke",
+                "color": "#%02x%02x%02x" % tuple(s.color),
+                "line": np.round(line, 2).tolist(),
+                "width": round(float(s.width), 2), "closed": bool(s.closed), "cap": s.cap,
+                "span": [int(visible[0]), int(visible[-1])],
+                "start": [[f, round(float(start[at[f]]), 4)] for f in ks],
+                "len": [[f, round(float(length[at[f]]), 4)] for f in kl],
+            })
+            continue
         visible, keys = keyframes(s)
         tr = s.track
         rot = np.full(n, np.nan)
@@ -67,6 +81,20 @@ def scene_to_shapes(scene: dict) -> list[Shape]:
         if o.get("hidden"):
             continue
         span = tuple(o["span"])
+        if o.get("kind") == "stroke":
+            start = _interp(o["start"], n, span, 1)[:, 0]
+            length = _interp(o["len"], n, span, 1)[:, 0]
+            if o["closed"]:
+                trim = np.c_[start % 1.0, (start + length) % 1.0]
+                full = length >= 0.999
+                trim[full] = (0.0, 1.0)
+            else:
+                trim = np.c_[start, np.minimum(start + length, 1.0)]
+            track = np.full((n, 4), np.nan)
+            track[~np.isnan(start)] = [0.0, 0.0, 0.0, 1.0]
+            shapes.append(Shape("stroke", _hex(o["color"]), np.array(o["line"], float), None, track,
+                                width=float(o["width"]), closed=bool(o["closed"]), cap=o["cap"], trim=trim))
+            continue
         pos = _interp(o["pos"], n, span, 2)
         rot = _interp(o["rot"], n, span, 1)
         scale = _interp(o["scale"], n, span, 1)

@@ -2,10 +2,10 @@
   "summary": {
     "animations": 24,
     "crashes": 0,
-    "mean_iou": 0.7162821485255916,
-    "iou_ge_0.9": 7,
-    "iou_0.7_0.9": 9,
-    "iou_lt_0.7": 8
+    "mean_iou": 0.8042471413662615,
+    "iou_ge_0.9": 8,
+    "iou_0.7_0.9": 11,
+    "iou_lt_0.7": 5
   },
   "rows": [
     {
@@ -15,7 +15,7 @@
       "objects": 2,
       "iou": 0.974055976485578,
       "keyframes": 153,
-      "seconds": 0.81,
+      "seconds": 0.87,
       "foreground_share": 0.155
     },
     {
@@ -23,9 +23,9 @@
       "frames": 30,
       "colours": 3,
       "objects": 2,
-      "iou": 0.7620061123533718,
-      "keyframes": 94,
-      "seconds": 0.59,
+      "iou": 0.7492983644297032,
+      "keyframes": 93,
+      "seconds": 0.96,
       "foreground_share": 0.017
     },
     {
@@ -35,7 +35,7 @@
       "objects": 12,
       "iou": 0.8184900317881404,
       "keyframes": 330,
-      "seconds": 0.89,
+      "seconds": 0.91,
       "foreground_share": 0.027
     },
     {
@@ -45,17 +45,17 @@
       "objects": 2,
       "iou": 0.5583727808914511,
       "keyframes": 234,
-      "seconds": 2.37,
+      "seconds": 2.41,
       "foreground_share": 0.489
     },
     {
       "name": "colorline",
       "frames": 42,
       "colours": 5,
-      "objects": 9,
-      "iou": 0.3352608183700446,
-      "keyframes": 239,
-      "seconds": 0.7,
+      "objects": 4,
+      "iou": 0.8506069111011004,
+      "keyframes": 211,
+      "seconds": 2.15,
       "foreground_share": 0.005
     },
     {
@@ -75,7 +75,7 @@
       "objects": 4,
       "iou": 0.8084732548681207,
       "keyframes": 147,
-      "seconds": 1.31,
+      "seconds": 1.32,
       "foreground_share": 0.322
     },
     {
@@ -92,20 +92,20 @@
       "name": "infinite_rainbow",
       "frames": 35,
       "colours": 10,
-      "objects": 8,
-      "iou": 0.22973373270111094,
-      "keyframes": 792,
-      "seconds": 1.27,
+      "objects": 12,
+      "iou": 0.5739685732301913,
+      "keyframes": 514,
+      "seconds": 4.5,
       "foreground_share": 0.053
     },
     {
       "name": "loading_semicircle",
       "frames": 54,
       "colours": 2,
-      "objects": 4,
-      "iou": 0.24734118542311448,
-      "keyframes": 83,
-      "seconds": 0.78,
+      "objects": 5,
+      "iou": 0.6278566283948877,
+      "keyframes": 229,
+      "seconds": 2.44,
       "foreground_share": 0.003
     },
     {
@@ -123,9 +123,9 @@
       "frames": 80,
       "colours": 1,
       "objects": 1,
-      "iou": 0.3256882915683363,
-      "keyframes": 96,
-      "seconds": 0.67,
+      "iou": 0.8644752796819467,
+      "keyframes": 54,
+      "seconds": 0.92,
       "foreground_share": 0.011
     },
     {
@@ -135,7 +135,7 @@
       "objects": 10,
       "iou": 0.3012831315069676,
       "keyframes": 170,
-      "seconds": 0.9,
+      "seconds": 0.92,
       "foreground_share": 0.026
     },
     {
@@ -152,10 +152,10 @@
       "name": "play_button",
       "frames": 56,
       "colours": 1,
-      "objects": 3,
-      "iou": 0.5910775527490446,
+      "objects": 2,
+      "iou": 0.9360617645032702,
       "keyframes": 27,
-      "seconds": 0.95,
+      "seconds": 1.68,
       "foreground_share": 0.127
     },
     {
@@ -165,7 +165,7 @@
       "objects": 7,
       "iou": 0.7653835809563263,
       "keyframes": 242,
-      "seconds": 0.76,
+      "seconds": 0.77,
       "foreground_share": 0.01
     },
     {
@@ -175,7 +175,7 @@
       "objects": 2,
       "iou": 0.8651264653875368,
       "keyframes": 20,
-      "seconds": 0.73,
+      "seconds": 0.74,
       "foreground_share": 0.048
     },
     {
@@ -215,7 +215,7 @@
       "objects": 9,
       "iou": 0.9449766246896761,
       "keyframes": 79,
-      "seconds": 0.95,
+      "seconds": 0.96,
       "foreground_share": 0.026
     },
     {
@@ -235,7 +235,7 @@
       "objects": 9,
       "iou": 0.8770566536043172,
       "keyframes": 166,
-      "seconds": 3.27,
+      "seconds": 3.29,
       "foreground_share": 0.453
     },
     {

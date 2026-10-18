@@ -33,6 +33,7 @@
         <div class="samples" role="list" aria-label="Samples">
           <button class="sample" data-src="samples/bounce.gif" role="listitem"><img src="samples/bounce.gif" alt="Sample: a bouncing ball, a spinning star, a pulsing ring"></button>
           <button class="sample" data-src="samples/orbit.gif" role="listitem"><img src="samples/orbit.gif" alt="Sample: a square orbiting, a triangle crossing"></button>
+          <button class="sample" data-src="samples/loader.gif" role="listitem"><img src="samples/loader.gif" alt="Sample: a spinning loader, a wave and a check mark drawing themselves"></button>
           <button class="sample" data-src="samples/assemble.gif" role="listitem"><img src="samples/assemble.gif" alt="Sample: three shapes assembling into a logo"></button>
         </div>
         <p class="drop__note">Runs on your machine: Python and OpenCV compiled to WebAssembly. Nothing is uploaded.</p>
@@ -73,12 +74,16 @@
           <span>Colour</span>
           <input type="color" id="color">
         </label>
+        <label class="field" id="width-field" hidden>
+          <span>Width <output id="width-out" class="mono"></output></span>
+          <input type="range" id="width" min="1" max="24" step="0.5">
+        </label>
         <dl class="facts mono" id="facts"></dl>
         <div class="row">
           <button class="btn" id="toggle-visible">Hide</button>
           <button class="btn" id="reset">Reset</button>
         </div>
-        <p class="hint">Drag a handle to move a keyframe. Drag the object to move its whole path.</p>
+        <p class="hint" id="hint"></p>
       </section>
 
       <section class="side__block">
