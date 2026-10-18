@@ -61,6 +61,8 @@ def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
     canvas = Image.new("RGB", (w * SUPERSAMPLE, h * SUPERSAMPLE), background)
     for shape in shapes:
         x, y, rot, scale = shape.track[frame]
+        if math.isnan(x):  # not present on this frame
+            continue
         mask = Image.new("L", canvas.size, 0)
         draw = ImageDraw.Draw(mask)
         outer = transform(shape.outer, x, y, rot, scale) * SUPERSAMPLE

@@ -102,6 +102,15 @@ class Track:
     colour: int
     frames: dict[int, np.ndarray] = field(default_factory=dict)  # frame -> boolean mask
 
+    def radius(self) -> float:
+        """Largest distance from the centroid to a pixel of the object, over its views."""
+        r = 0.0
+        for t, m in self.frames.items():
+            ys, xs = np.nonzero(m)
+            c = np.array([xs.mean(), ys.mean()])
+            r = max(r, float(np.sqrt(((np.c_[xs, ys] - c) ** 2).sum(1)).max()))
+        return r
+
     def centroid(self, t: int) -> np.ndarray:
         ys, xs = np.nonzero(self.frames[t])
         return np.array([xs.mean(), ys.mean()])
@@ -132,8 +141,8 @@ def track_objects(labels: np.ndarray) -> list[Track]:
                 if c in used:
                     continue
                 # A small extra piece near an existing object is a fragment cut by an occluder.
-                near = [tr for tr in live if t in tr.frames and
-                        np.linalg.norm(tr.centroid(t) - o[1]) < GATE and o[2] < 0.5 * tr.frames[t].sum()]
+                near = [tr for tr in live if t in tr.frames and o[2] < 0.9 * _size(tr) and
+                        np.linalg.norm(tr.centroid(t) - o[1]) < max(12.0, 1.2 * tr.radius())]
                 if near:
                     near[0].frames[t] = near[0].frames[t] | o[0]
                 else:
@@ -186,7 +195,7 @@ def _is_fragment(small: Track, big: Track) -> bool:
     common = set(small.frames) & set(big.frames)
     if not common or _size(small) > 0.8 * _size(big) or len(common) < 0.6 * len(small.frames):
         return False
-    radius = math.sqrt(_size(big) / math.pi) * 1.6
+    radius = 1.2 * big.radius()
     return all(np.linalg.norm(small.centroid(t) - big.centroid(t)) < radius for t in common)
 
 
@@ -315,9 +324,10 @@ def to_shapes(objects: list[FittedObject], labels: np.ndarray, n_frames: int) ->
         outer, hole = vectorise(obj)
         frames = sorted(obj.params)
         track = np.array([obj.params[t] for t in frames])
-        full = np.empty((n_frames, 4))
+        full = np.full((n_frames, 4), np.nan)
+        span = np.arange(frames[0], frames[-1] + 1)
         for i in range(4):
-            full[:, i] = np.interp(np.arange(n_frames), frames, track[:, i])
+            full[span, i] = np.interp(span, frames, track[:, i])
         shapes.append(Shape("polygon", obj.colour, outer, hole, full))
     return _z_order(shapes, objects, labels)
 
@@ -332,7 +342,8 @@ def _z_order(shapes, objects, labels):
         masks = []
         for s in shapes:
             m = np.zeros((h, w), np.uint8)
-            cv2.fillPoly(m, [np.rint(transform(s.outer, *s.track[t])).astype(np.int32)], 1)
+            if not np.isnan(s.track[t, 0]):
+                cv2.fillPoly(m, [np.rint(transform(s.outer, *s.track[t])).astype(np.int32)], 1)
             masks.append(m.astype(bool))
         for i in range(n):
             for j in range(i + 1, n):

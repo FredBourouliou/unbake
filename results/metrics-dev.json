@@ -1,32 +1,32 @@
 {
   "easy": {
     "samples": 20,
-    "identity": 0.9961988304093568,
+    "identity": 0.9871345029239766,
     "pos_median": 0.08973396985005662,
     "rot_median": 0.26849999999999596,
-    "scale_median": 0.005870539280530743,
-    "iou": 0.95732272710058,
+    "scale_median": 0.006018805921486231,
+    "iou": 0.9632582349456731,
     "objects_found/true": "51/50",
-    "seconds_per_gif": 1.2381505846977234
+    "seconds_per_gif": 1.2297021865844726
   },
   "medium": {
     "samples": 20,
-    "identity": 0.9551208658620807,
+    "identity": 0.9725266090804207,
     "pos_median": 0.17609725149645045,
-    "rot_median": 0.33325000000000315,
-    "scale_median": 0.008447796695197322,
-    "iou": 0.8898614263833602,
-    "objects_found/true": "101/90",
-    "seconds_per_gif": 1.6886013865470886
+    "rot_median": 0.33350000000000435,
+    "scale_median": 0.007970376915294404,
+    "iou": 0.920009277273542,
+    "objects_found/true": "93/90",
+    "seconds_per_gif": 1.6975685596466064
   },
   "hard": {
     "samples": 10,
-    "identity": 0.6061851635066483,
-    "pos_median": 0.4322702253813789,
-    "rot_median": 0.7562500000000014,
-    "scale_median": 0.012327768473322204,
-    "iou": 0.7124908238342549,
-    "objects_found/true": "67/57",
-    "seconds_per_gif": 1.796535611152649
+    "identity": 0.5548966881916717,
+    "pos_median": 0.33076964708764245,
+    "rot_median": 0.5065000000000097,
+    "scale_median": 0.01165114198444028,
+    "iou": 0.7725316394598708,
+    "objects_found/true": "54/57",
+    "seconds_per_gif": 1.8282305240631103
   }
 }

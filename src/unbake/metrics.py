@@ -29,7 +29,7 @@ def score(rec: dict, truth_path: str) -> dict:
     # Match objects on mean centroid distance over the animation.
     matched: dict[int, int] = {}
     if len(shapes):
-        cost = np.linalg.norm(gt_xy[:, None] - est_xy[None], axis=-1).mean(-1)
+        cost = np.nanmean(np.linalg.norm(gt_xy[:, None] - est_xy[None], axis=-1), axis=-1)
         for g, e in zip(*linear_sum_assignment(cost)):
             if cost[g, e] < 25:
                 matched[g] = e
@@ -43,7 +43,7 @@ def score(rec: dict, truth_path: str) -> dict:
         for t in range(n_frames):
             if e is None:
                 continue
-            d = np.linalg.norm(est_xy[:, t] - track[t, :2], axis=1)
+            d = np.nan_to_num(np.linalg.norm(est_xy[:, t] - track[t, :2], axis=1), nan=np.inf)
             if d.argmin() == e and d[e] < ID_RADIUS:
                 identity_ok += 1
         if e is None:
@@ -90,6 +90,6 @@ def _objects_in_shape_order(rec):
     out = []
     for s in rec["shapes"]:
         best = min(rec["objects"], key=lambda o: (o.colour != s.color,
-                                                 np.linalg.norm(o.params[o.ref_frame][:2] - s.track[o.ref_frame, :2])))
+                                                 np.nan_to_num(np.linalg.norm(o.params[o.ref_frame][:2] - s.track[o.ref_frame, :2]), nan=1e9)))
         out.append(best)
     return out
