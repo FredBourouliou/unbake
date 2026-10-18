@@ -10,7 +10,7 @@ import math
 
 import numpy as np
 
-from .scene import Shape
+from .scene import Shape, holes
 
 # Maximum deviation allowed when dropping a frame, per channel.
 TOLERANCE = {"x": 0.35, "y": 0.35, "rot": 1.5, "scale": 0.015}
@@ -84,8 +84,7 @@ def to_lottie(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: in
         rot[visible] = np.unwrap(np.deg2rad(tr[visible, 2])) * 180 / math.pi
         pos_frames = sorted(set(keys["x"]) | set(keys["y"]))
         items = [_path(s.outer)]
-        if s.hole is not None:
-            items.append(_path(s.hole))
+        items += [_path(h) for h in holes(s)]
         items.append({"ty": "fl", "c": {"a": 0, "k": [c / 255 for c in s.color] + [1]},
                       "o": {"a": 0, "k": 100}, "r": 2})  # even-odd: the hole stays empty
         items.append({"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]},
@@ -141,7 +140,7 @@ def to_svg(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
         pos = sorted(set(keys["x"]) | set(keys["y"]))
         first = visible[0]
         static = (f'translate({tr[first, 0]:.2f} {tr[first, 1]:.2f}) rotate({tr[first, 2]:.2f}) scale({tr[first, 3]:.4f})')
-        d = _d(s.outer) + ("" if s.hole is None else " " + _d(s.hole))
+        d = " ".join([_d(s.outer)] + [_d(h) for h in holes(s)])
         animations = (anim("translate", pos, lambda f: f"{tr[f, 0]:.2f} {tr[f, 1]:.2f}")
                       + anim("rotate", keys["rot"], lambda f: f"{tr[f, 2]:.2f}")
                       + anim("scale", keys["scale"], lambda f: f"{tr[f, 3]:.4f}"))

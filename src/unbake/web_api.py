@@ -16,7 +16,7 @@ import numpy as np
 
 from .export import keyframes, to_lottie, to_svg
 from .reconstruct import reconstruct
-from .scene import Shape
+from .scene import Shape, holes
 
 
 def reconstruct_gif(data: bytes) -> dict:
@@ -36,7 +36,7 @@ def reconstruct_gif(data: bytes) -> dict:
             "id": i,
             "color": "#%02x%02x%02x" % tuple(s.color),
             "outer": np.round(s.outer, 2).tolist(),
-            "hole": None if s.hole is None else np.round(s.hole, 2).tolist(),
+            "holes": [np.round(h, 2).tolist() for h in holes(s)],
             "span": [int(visible[0]), int(visible[-1])],
             "pos": [[f, round(float(tr[f, 0]), 2), round(float(tr[f, 1]), 2)] for f in pos],
             "rot": [[f, round(float(rot[f]), 2)] for f in keys["rot"]],
@@ -71,8 +71,8 @@ def scene_to_shapes(scene: dict) -> list[Shape]:
         rot = _interp(o["rot"], n, span, 1)
         scale = _interp(o["scale"], n, span, 1)
         track = np.c_[pos, rot, scale]
-        shapes.append(Shape("polygon", _hex(o["color"]), np.array(o["outer"], float),
-                            None if o["hole"] is None else np.array(o["hole"], float), track))
+        hole_list = [np.array(h, float) for h in o.get("holes", [])]
+        shapes.append(Shape("polygon", _hex(o["color"]), np.array(o["outer"], float), hole_list or None, track))
     return shapes
 
 

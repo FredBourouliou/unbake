@@ -6,3 +6,5 @@ tools/lottie-render/node_modules/
 results/export/
 web/py/
 results/compare/
+data/real/
+results/real/*.png

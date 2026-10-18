@@ -1,7 +1,7 @@
 """Scene model and renderer shared by the corpus generator and the reconstruction.
 
 A scene is a list of shapes drawn in z-order on a flat background. Each shape has a
-local outline (polygon, possibly with one hole) and per-frame transforms
+local outline (polygon, possibly with holes) and per-frame transforms
 (x, y, rotation in degrees, uniform scale).
 """
 from __future__ import annotations
@@ -49,9 +49,15 @@ class Shape:
     kind: str
     color: tuple[int, int, int]
     outer: np.ndarray
-    hole: np.ndarray | None = None
+    hole: np.ndarray | list | None = None  # one polygon, a list of polygons, or None
     # One (x, y, rot, scale) row per frame.
     track: np.ndarray = field(default_factory=lambda: np.zeros((0, 4)))
+
+
+def holes(shape: "Shape") -> list[np.ndarray]:
+    if shape.hole is None:
+        return []
+    return list(shape.hole) if isinstance(shape.hole, list) else [shape.hole]
 
 
 def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
@@ -67,8 +73,8 @@ def render_frame(shapes: list[Shape], frame: int, size: tuple[int, int],
         draw = ImageDraw.Draw(mask)
         outer = transform(shape.outer, x, y, rot, scale) * SUPERSAMPLE
         draw.polygon([tuple(p) for p in outer], fill=255)
-        if shape.hole is not None:
-            hole = transform(shape.hole, x, y, rot, scale) * SUPERSAMPLE
+        for hole_poly in holes(shape):
+            hole = transform(hole_poly, x, y, rot, scale) * SUPERSAMPLE
             draw.polygon([tuple(p) for p in hole], fill=0)
         canvas.paste(Image.new("RGB", canvas.size, shape.color), mask=mask)
     return np.asarray(canvas.resize((w, h), Image.LANCZOS))

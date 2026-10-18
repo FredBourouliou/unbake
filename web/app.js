@@ -100,8 +100,7 @@ function params(o, f) {
 function objectPath(o, p) {
   const S = scale(), c = Math.cos(p.r * Math.PI / 180), sn = Math.sin(p.r * Math.PI / 180);
   const path = new Path2D();
-  for (const ring of [o.outer, o.hole]) {
-    if (!ring) continue;
+  for (const ring of [o.outer, ...(o.holes || [])]) {
     ring.forEach(([px, py], i) => {
       const X = (px * c - py * sn) * p.s + p.x, Y = (px * sn + py * c) * p.s + p.y;
       i ? path.lineTo(X * S, Y * S) : path.moveTo(X * S, Y * S);

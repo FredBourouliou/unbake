@@ -52,6 +52,22 @@ The hard level (near-identical colours, same-colour shapes crossing) fails, as e
 
 Reproduce: `uv run python -m unbake.corpus data && uv run python scripts/evaluate.py data/holdout`.
 
+## Real-world test
+
+24 community animations from the LottieFiles collection bundled in [airbnb/lottie-android](https://github.com/airbnb/lottie-android/tree/master/snapshot-tests/src/main/assets/lottiefiles) (loaders, toggles, icons, logos, emoji), rendered to dithered 256 px GIFs and unbaked. No object-level ground truth here: the score is the per-colour-region IoU between input and reconstruction, plus a visual review of every contact sheet (`scripts/real_gifs.py`).
+
+| Visual verdict | Count | Animations |
+|---|---|---|
+| Faithful | 14 | gears, bell, x_pop, socar_logo, location_pin, retweet, turbine, emoji_wink, check_pop, pagination, preloader, cube_loader, bouncing_ball, medal |
+| Partial | 4 | toggle_switch (wrong colour), switch_loop (extra object), simple_loader (missing dot), clock (hands) |
+| Fails | 6 | material_loader, loading_semicircle, colorline, play_button, infinite_rainbow, trail_loading |
+
+Mean IoU 0.72 (it penalises thin strokes and small objects heavily: several "faithful" ones score 0.76–0.88). No crash, about 1 s per GIF.
+
+**What breaks:** strokes that draw themselves (Lottie trim paths) and shapes that morph. Unbake models objects as rigid outlines that move, rotate and scale, so a growing arc cannot be represented. This is the most common pattern in real loaders and the next thing to support. Also: gradients, very light strokes close to the background, and particles that merge.
+
+**Fixed after this test:** outlines with several holes (line icons were filled in), and same-colour nested parts being merged (a fragment is now joined to an object only when another object, not background, separates them). Synthetic dev scores unchanged within noise.
+
 ## Comparison
 
 OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach. Both tools were run on the first 10 medium holdout GIFs; both outputs are Lottie JSON rendered by lottie-web at the input's size and frame count, composited on the input background, and scored with the same per-colour-region IoU.

@@ -6,7 +6,7 @@ Pipeline
 3. track: link components into objects across frames (Hungarian matching on centroids).
 4. fit: for each object, take its largest view as a template and fit (x, y, rotation,
    scale) on every frame, ignoring template pixels hidden by another colour.
-5. vectorise: polygon outline (and hole) from the template.
+5. vectorise: polygon outline (and holes) from the template.
 """
 from __future__ import annotations
 
@@ -155,17 +155,40 @@ def track_objects(labels: np.ndarray) -> list[Track]:
                     continue
                 # A small extra piece near an existing object is a fragment cut by an occluder.
                 near = [tr for tr in live if t in tr.frames and o[2] < 0.9 * _size(tr) and
-                        np.linalg.norm(tr.centroid(t) - o[1]) < max(12.0, 1.2 * tr.radius())]
+                        np.linalg.norm(tr.centroid(t) - o[1]) < max(12.0, 1.2 * tr.radius()) and
+                        _split_by_occluder(tr.frames[t], o[0], lab)]
                 if near:
                     near[0].frames[t] = near[0].frames[t] | o[0]
                 else:
                     tr = Track(k, {t: o[0]})
                     active.append(tr)
                     tracks.append(tr)
-    return [tr for tr in merge_tracks(tracks) if len(tr.frames) >= 3]
+    return [tr for tr in merge_tracks(tracks, labels) if len(tr.frames) >= 3]
 
 
-def merge_tracks(tracks: list[Track]) -> list[Track]:
+def _split_by_occluder(a: np.ndarray, b: np.ndarray, lab: np.ndarray) -> bool:
+    """True when what separates masks a and b is another object, not background.
+
+    Pieces of one object cut by an occluder have the occluder's colour between them;
+    two distinct same-colour objects (a play triangle inside a ring) have background.
+    """
+    dist, labels_idx = cv2.distanceTransformWithLabels((~a).astype(np.uint8), cv2.DIST_L2, 5,
+                                                       labelType=cv2.DIST_LABEL_PIXEL)
+    by, bx = np.nonzero(b)
+    i = int(np.argmin(dist[by, bx]))
+    if dist[by[i], bx[i]] <= 2.0:
+        return True
+    # Nearest pixel of a to that point of b.
+    ay, ax = np.nonzero(a)
+    j = int(np.argmin((ay - by[i]) ** 2 + (ax - bx[i]) ** 2))
+    n = int(max(abs(ay[j] - by[i]), abs(ax[j] - bx[i]))) + 1
+    ys = np.rint(np.linspace(ay[j], by[i], n)).astype(int)
+    xs = np.rint(np.linspace(ax[j], bx[i], n)).astype(int)
+    between = lab[ys[1:-1], xs[1:-1]]
+    return bool(between.size) and np.mean(between == 0) < 0.35
+
+
+def merge_tracks(tracks: list[Track], labels: np.ndarray) -> list[Track]:
     """Join pieces of the same object that tracking split apart.
 
     - Re-appearance: an object hidden for a few frames comes back as a new track.
@@ -179,7 +202,7 @@ def merge_tracks(tracks: list[Track]) -> list[Track]:
             for j, b in enumerate(tracks):
                 if i == j or a.colour != b.colour:
                     continue
-                if _is_continuation(a, b) or _is_fragment(b, a):
+                if _is_continuation(a, b) or _is_fragment(b, a, labels):
                     for t, m in b.frames.items():
                         a.frames[t] = a.frames[t] | m if t in a.frames else m
                     tracks.pop(j)
@@ -204,12 +227,15 @@ def _is_continuation(a: Track, b: Track) -> bool:
     return np.linalg.norm(a.centroid(a_end) - b.centroid(b_start)) < GATE + 6 * gap
 
 
-def _is_fragment(small: Track, big: Track) -> bool:
+def _is_fragment(small: Track, big: Track, labels: np.ndarray) -> bool:
     common = set(small.frames) & set(big.frames)
     if not common or _size(small) > 0.8 * _size(big) or len(common) < 0.6 * len(small.frames):
         return False
     radius = 1.2 * big.radius()
-    return all(np.linalg.norm(small.centroid(t) - big.centroid(t)) < radius for t in common)
+    if not all(np.linalg.norm(small.centroid(t) - big.centroid(t)) < radius for t in common):
+        return False
+    checks = sorted(common)[:: max(1, len(common) // 5)]
+    return np.mean([_split_by_occluder(big.frames[t], small.frames[t], labels[t]) for t in checks]) >= 0.5
 
 
 # 4. fit ---------------------------------------------------------------------------------
@@ -313,8 +339,8 @@ def _refine(points, p, lab, k):
 
 # 5. vectorise ---------------------------------------------------------------------------
 
-def vectorise(obj: FittedObject) -> tuple[np.ndarray, np.ndarray | None]:
-    """Outline (and hole) polygons of the template, in the object's local frame."""
+def vectorise(obj: FittedObject) -> tuple[np.ndarray, list | None]:
+    """Outline polygon and hole polygons of the template, in the object's local frame."""
     up = 4
     pts = obj.points
     lo = np.floor(pts.min(0)) - 2
@@ -330,13 +356,10 @@ def vectorise(obj: FittedObject) -> tuple[np.ndarray, np.ndarray | None]:
     if not contours:
         return np.zeros((3, 2)), None
     outer_i = max(range(len(contours)), key=lambda i: cv2.contourArea(contours[i]))
-    hole = None
-    holes = [i for i in range(len(contours)) if hierarchy[0][i][3] == outer_i]
-    if holes:
-        hole_i = max(holes, key=lambda i: cv2.contourArea(contours[i]))
-        if cv2.contourArea(contours[hole_i]) > 0.05 * cv2.contourArea(contours[outer_i]):
-            hole = _simplify(contours[hole_i], up, lo)
-    return _simplify(contours[outer_i], up, lo), hole
+    outer_area = cv2.contourArea(contours[outer_i])
+    hole_list = [_simplify(contours[i], up, lo) for i in range(len(contours))
+                 if hierarchy[0][i][3] == outer_i and cv2.contourArea(contours[i]) > max(0.004 * outer_area, 2 * up * up)]
+    return _simplify(contours[outer_i], up, lo), (hole_list or None)
 
 
 def _simplify(contour, up, lo, grow=0.0):
