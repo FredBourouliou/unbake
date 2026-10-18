@@ -25,8 +25,21 @@ GATE = 45.0
 
 
 def load_frames(path: str) -> np.ndarray:
+    """Decode a GIF at a constant frame rate.
+
+    GIF frames can last different times (encoders merge identical consecutive frames and
+    extend their duration), so each frame is repeated according to its duration.
+    """
     gif = Image.open(path)
-    return np.stack([np.asarray(f.convert("RGB")) for f in ImageSequence.Iterator(gif)])
+    frames, durations = [], []
+    for f in ImageSequence.Iterator(gif):
+        frames.append(np.asarray(f.convert("RGB")))
+        durations.append(max(int(f.info.get("duration", 0) or 0), 1))
+    base = min(durations)
+    out = []
+    for frame, d in zip(frames, durations):
+        out.extend([frame] * max(1, round(d / base)))
+    return np.stack(out)
 
 
 # 1. palette --------------------------------------------------------------------------

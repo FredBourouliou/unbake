@@ -36,6 +36,8 @@ The hard set is reported but not part of the decision.
 
 **Correction logged on day 1:** the first corpus could give two shapes the same colour on the medium level (a generator bug: identical/near colours are meant to be a hard-level feature only). Found while inspecting the dev set; fixed and both sets regenerated before the holdout set had ever been scored.
 
+**Correction logged on day 1 (holdout run):** the first holdout run crashed on `easy-10007` before printing any metric: the GIF encoder had merged identical consecutive frames and extended their duration, and the loader ignored durations. The loader now decodes at a constant frame rate using frame durations (needed for real-world GIFs anyway). No reconstruction logic was changed; the holdout set was then run once.
+
 ## Comparison
 
 OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach; it will be run on a subset of the same holdout GIFs when feasible on local hardware.
