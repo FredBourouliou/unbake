@@ -86,6 +86,17 @@ This holdout set is now spent: after one more iteration on the dev set, the crit
 **v0.2 on the fresh holdout (run once, commit `b697706`):** strokes recovered 97.1 % (✓), mean stroke IoU **0.822** (✓), region IoU 0.866 (✓), medium samples with a false stroke **1/20 = 5 %** (✗, threshold < 5 %). v0.1 non-regression holds (identity 95.3 %, 0.15 px, 0.37°, IoU 0.936).
 Verdict: three of four criteria met. The remaining failure is a rigid ring occasionally classified as a stroke (visually close, wrong object type for editing). Logged as a known issue; it will be fixed and checked on yet another unseen holdout, not on this one.
 
+### v0.3: easing curves (criterion written before the code)
+
+Keyframes are currently joined by straight lines, so a bouncing ball needs a keyframe almost every frame. v0.3 joins them with cubic-Bézier easing curves (as in CSS, After Effects and Lottie), with keys placed at extrema first.
+
+| Metric | Go if |
+|---|---|
+| Keyframes in the export, relative to v0.2 (same reconstructions) | ≤ 50 % |
+| Region IoU of the Lottie export rendered by lottie-web, relative to v0.2 | drop ≤ 0.01 |
+
+Measured on dev while developing, then once on a fresh holdout (seeds 30 000+: 20 medium, 20 strokes).
+
 ### Results (holdout, run once, commit `e34f877`)
 
 | Level | Identity | Median position error | Median rotation error | Mean IoU | Objects found / true | Time per GIF |
