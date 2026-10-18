@@ -31,7 +31,7 @@ def load_frames(path: str) -> np.ndarray:
 
 # 1. palette --------------------------------------------------------------------------
 
-def find_palette(frames: np.ndarray, merge: float = 34.0, min_share: float = 0.0015):
+def find_palette(frames: np.ndarray, merge: float = 34.0, min_share: float = 0.0003):
     border = np.concatenate([frames[0, 0], frames[0, -1], frames[0, :, 0], frames[0, :, -1]])
     vals, counts = np.unique(border, axis=0, return_counts=True)
     background = vals[counts.argmax()].astype(float)
@@ -56,8 +56,26 @@ def find_palette(frames: np.ndarray, merge: float = 34.0, min_share: float = 0.0
         else:
             centres.append(colour)
             weights.append(float(counts[idx]))
-    colours = [c for c in centres if np.linalg.norm(c - background) > merge]
-    return background, np.array(colours)
+    # Candidate colours (with their pixel counts), excluding the background.
+    cands = [(c, w) for c, w in zip(centres, weights) if np.linalg.norm(c - background) > merge]
+    refs = [(background, float("inf"))] + cands
+    keep = []
+    for c, w in cands:
+        # A rare colour lying on the segment between two much more frequent colours is an
+        # antialiasing / dithering blend, not a real object colour.
+        blend = False
+        for i in range(len(refs)):
+            for j in range(i + 1, len(refs)):
+                (ca, wa), (cb, wb) = refs[i], refs[j]
+                if ca is c or cb is c or w > 0.15 * min(wa, wb):
+                    continue
+                ab = cb - ca
+                t = np.clip(np.dot(c - ca, ab) / (np.dot(ab, ab) + 1e-9), 0.15, 0.85)
+                if np.linalg.norm(ca + t * ab - c) < 12:
+                    blend = True
+        if not blend:
+            keep.append(c)
+    return background, np.array(keep)
 
 
 def label_frames(frames: np.ndarray, background: np.ndarray, colours: np.ndarray) -> np.ndarray:
@@ -122,7 +140,54 @@ def track_objects(labels: np.ndarray) -> list[Track]:
                     tr = Track(k, {t: o[0]})
                     active.append(tr)
                     tracks.append(tr)
-    return [tr for tr in tracks if len(tr.frames) >= 3]
+    return [tr for tr in merge_tracks(tracks) if len(tr.frames) >= 3]
+
+
+def merge_tracks(tracks: list[Track]) -> list[Track]:
+    """Join pieces of the same object that tracking split apart.
+
+    - Re-appearance: an object hidden for a few frames comes back as a new track.
+    - Fragment: an occluder cuts an object in two and one piece gets its own track.
+    """
+    tracks = sorted(tracks, key=lambda tr: min(tr.frames))
+    changed = True
+    while changed:
+        changed = False
+        for i, a in enumerate(tracks):
+            for j, b in enumerate(tracks):
+                if i == j or a.colour != b.colour:
+                    continue
+                if _is_continuation(a, b) or _is_fragment(b, a):
+                    for t, m in b.frames.items():
+                        a.frames[t] = a.frames[t] | m if t in a.frames else m
+                    tracks.pop(j)
+                    changed = True
+                    break
+            if changed:
+                break
+    return tracks
+
+
+def _size(tr: Track) -> float:
+    return max(m.sum() for m in tr.frames.values())
+
+
+def _is_continuation(a: Track, b: Track) -> bool:
+    a_end, b_start = max(a.frames), min(b.frames)
+    gap = b_start - a_end
+    if not -2 <= gap <= 15:
+        return False
+    if not 0.25 < _size(b) / _size(a) < 4.0:
+        return False
+    return np.linalg.norm(a.centroid(a_end) - b.centroid(b_start)) < GATE + 6 * gap
+
+
+def _is_fragment(small: Track, big: Track) -> bool:
+    common = set(small.frames) & set(big.frames)
+    if not common or _size(small) > 0.8 * _size(big) or len(common) < 0.6 * len(small.frames):
+        return False
+    radius = math.sqrt(_size(big) / math.pi) * 1.6
+    return all(np.linalg.norm(small.centroid(t) - big.centroid(t)) < radius for t in common)
 
 
 # 4. fit ---------------------------------------------------------------------------------
@@ -140,8 +205,9 @@ def _score(points, p, labels_t, k):
     x, y, rot, s = p
     c, si = math.cos(math.radians(rot)), math.sin(math.radians(rot))
     q = points @ np.array([[c, si], [-si, c]]) * s + [x, y]
-    u = np.rint(q[:, 0]).astype(int)
-    v = np.rint(q[:, 1]).astype(int)
+    # Continuous coordinates: pixel i covers [i, i+1).
+    u = np.floor(q[:, 0]).astype(int)
+    v = np.floor(q[:, 1]).astype(int)
     h, w = labels_t.shape
     inside = (u >= 0) & (u < w) & (v >= 0) & (v < h)
     lab = np.full(len(points), 0, np.uint8)
@@ -157,8 +223,9 @@ def fit_track(track: Track, labels: np.ndarray, colours: np.ndarray) -> FittedOb
     k = track.colour
     ref = max(track.frames, key=lambda t: track.frames[t].sum())
     ys, xs = np.nonzero(track.frames[ref])
-    ref_c = np.array([xs.mean(), ys.mean()])
-    points = np.c_[xs, ys] - ref_c
+    # Pixel centres in continuous coordinates (pixel i is centred on i + 0.5).
+    ref_c = np.array([xs.mean(), ys.mean()]) + 0.5
+    points = np.c_[xs, ys] + 0.5 - ref_c
     ref_area = len(points)
 
     params: dict[int, np.ndarray] = {ref: np.array([*ref_c, 0.0, 1.0])}
@@ -169,7 +236,7 @@ def fit_track(track: Track, labels: np.ndarray, colours: np.ndarray) -> FittedOb
         for t in order:
             mask = track.frames[t]
             ys, xs = np.nonzero(mask)
-            centroid = np.array([xs.mean(), ys.mean()])
+            centroid = np.array([xs.mean(), ys.mean()]) + 0.5
             s0 = math.sqrt(max(mask.sum(), 1) / ref_area)
             candidates = [prev.copy(), np.array([*centroid, prev[2], prev[3]]),
                           np.array([*centroid, prev[2], np.clip(s0, 0.5, 2.0)])]
@@ -210,8 +277,9 @@ def vectorise(obj: FittedObject) -> tuple[np.ndarray, np.ndarray | None]:
     lo = np.floor(pts.min(0)) - 2
     size = (np.ceil(pts.max(0) - lo) + 3).astype(int)
     mask = np.zeros((size[1] * up, size[0] * up), np.uint8)
-    for x, y in (pts - lo):
-        mask[int(y * up):int(y * up) + up, int(x * up):int(x * up) + up] = 255
+    # Each template point is a pixel centre: paint the square [p - 0.5, p + 0.5).
+    for x, y in (pts - lo - 0.5):
+        mask[int(round(y * up)):int(round(y * up)) + up, int(round(x * up)):int(round(x * up)) + up] = 255
     mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((up + 1, up + 1), np.uint8))
     contours, hierarchy = cv2.findContours(mask, cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
     if not contours:
@@ -223,8 +291,7 @@ def vectorise(obj: FittedObject) -> tuple[np.ndarray, np.ndarray | None]:
         hole_i = max(holes, key=lambda i: cv2.contourArea(contours[i]))
         if cv2.contourArea(contours[hole_i]) > 0.05 * cv2.contourArea(contours[outer_i]):
             hole = _simplify(contours[hole_i], up, lo)
-    # Pixel centres sit half a pixel inside the true edge: compensate.
-    return _simplify(contours[outer_i], up, lo, grow=0.5), (None if hole is None else _grow(hole, -0.5))
+    return _simplify(contours[outer_i], up, lo), hole
 
 
 def _simplify(contour, up, lo, grow=0.0):

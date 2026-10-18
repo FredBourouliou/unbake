@@ -34,6 +34,8 @@ Measured on the **medium holdout** set, per ground-truth object and frame:
 
 The hard set is reported but not part of the decision.
 
+**Correction logged on day 1:** the first corpus could give two shapes the same colour on the medium level (a generator bug: identical/near colours are meant to be a hard-level feature only). Found while inspecting the dev set; fixed and both sets regenerated before the holdout set had ever been scored.
+
 ## Comparison
 
 OmniLottie (CVPR 2026, 4B parameters, video → Lottie) is the reference learned approach; it will be run on a subset of the same holdout GIFs when feasible on local hardware.

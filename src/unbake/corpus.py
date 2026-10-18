@@ -61,9 +61,10 @@ def make_sample(level: str, seed: int) -> dict:
             base = np.array(shapes[-1].color, float)
             color = tuple(int(c) for c in np.clip(base + rng.uniform(-28, 28, 3), 0, 255))
         else:
-            color = PALETTE[colors[i % len(PALETTE)]]
-            if sum(abs(a - b) for a, b in zip(color, background)) < 60:
-                color = PALETTE[colors[(i + 3) % len(PALETTE)]]
+            # Distinct colours, none too close to the background (same-colour shapes are a "hard" feature).
+            used = {s.color for s in shapes}
+            color = next(PALETTE[c] for c in colors
+                         if PALETTE[c] not in used and sum(abs(a - b) for a, b in zip(PALETTE[c], background)) >= 60)
         size = float(rng.uniform(14, 30))
         outer, hole = outline(kind, size, float(rng.uniform(0.45, 0.8)))
         n_keys = int(rng.integers(2, 5))
