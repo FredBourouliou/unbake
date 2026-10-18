@@ -4,12 +4,15 @@ Usage: uv run python scripts/evaluate_gradients.py data/dev
 """
 import json
 import sys
+import tempfile
 from multiprocessing import Pool
 from pathlib import Path
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+from unbake.export import to_lottie
+from unbake.lottie_render import render_lottie
 from unbake.metrics import score
 from unbake.reconstruct import reconstruct
 from unbake.scene import Shape, render
@@ -36,6 +39,13 @@ def run_gradient(gif):
     b = np.stack(render(rec["shapes"], T, size, rec["background"])).astype(float)
     fg = np.abs(a - np.array(bg, float)).sum(-1) > 30
     err = float(np.abs(a - b)[fg].mean())
+    # Export fidelity: the Lottie file rendered by lottie-web vs the reconstruction's own render.
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "out.json"
+        path.write_text(json.dumps(to_lottie(rec["shapes"], size, truth["fps"], T, rec["background"])))
+        lot = render_lottie(str(path), size, T, rec["background"]).astype(float)
+    fg_rec = np.abs(b - np.array(rec["background"], float)).sum(-1) > 30
+    lottie_err = float(np.abs(lot - b)[fg_rec].mean())
     # Gradient objects recovered: matched by centroid (as in metrics.score) and filled with a gradient.
     est = rec["shapes"]
     found = total = 0
@@ -53,7 +63,8 @@ def run_gradient(gif):
         total += 1
         e = pairs.get(g)
         found += e is not None and est[e].gradient is not None
-    return {"identity": s["identity"], "pos": s["pos_median"], "colour_error": err, "found": found, "total": total}
+    return {"identity": s["identity"], "pos": s["pos_median"], "colour_error": err, "lottie_error": lottie_err,
+            "found": found, "total": total}
 
 
 def run_medium(gif):
@@ -73,6 +84,7 @@ if __name__ == "__main__":
         "identity": float(np.mean([r["identity"] for r in rows])),
         "pos_median": float(np.median([r["pos"] for r in rows])),
         "colour_error": float(np.mean([r["colour_error"] for r in rows])),
+        "lottie_error": float(np.mean([r["lottie_error"] for r in rows])),
         "medium_with_false_gradient": f"{sum(medium)}/{len(medium)}",
     }
     print(json.dumps(summary, indent=2))

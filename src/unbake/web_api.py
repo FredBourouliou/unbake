@@ -41,6 +41,10 @@ def reconstruct_gif(data: bytes) -> dict:
                          "closed": bool(s.closed), "cap": s.cap})
             base.update({name: _keys_json(keys) for name, keys in ch.items()})
         else:
+            if s.gradient is not None:
+                p0, p1, c0, c1 = s.gradient
+                base["gradient"] = {"p0": np.round(p0, 2).tolist(), "p1": np.round(p1, 2).tolist(),
+                                    "colors": ["#%02x%02x%02x" % tuple(c0), "#%02x%02x%02x" % tuple(c1)]}
             base.update({"outer": np.round(s.outer, 2).tolist(), "holes": [np.round(hp, 2).tolist() for hp in holes(s)],
                          "x": _keys_json(ch["x"], 2), "y": _keys_json(ch["y"], 2),
                          "rot": _keys_json(ch["rot"], 2), "scale": _keys_json(ch["scale"], 4)})
@@ -86,7 +90,11 @@ def scene_to_shapes(scene: dict) -> list[Shape]:
             continue
         track = np.c_[_sample(o["x"], n, span), _sample(o["y"], n, span), _sample(o["rot"], n, span), _sample(o["scale"], n, span)]
         hole_list = [np.array(hp, float) for hp in o.get("holes", [])]
-        shapes.append(Shape("polygon", _hex(o["color"]), np.array(o["outer"], float), hole_list or None, track))
+        g = o.get("gradient")
+        gradient = None if g is None else (np.array(g["p0"], float), np.array(g["p1"], float),
+                                           _hex(g["colors"][0]), _hex(g["colors"][1]))
+        shapes.append(Shape("polygon", _hex(o["color"]), np.array(o["outer"], float), hole_list or None, track,
+                            gradient=gradient))
     return shapes
 
 

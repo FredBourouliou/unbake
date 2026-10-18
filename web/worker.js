@@ -1,7 +1,7 @@
 // Runs the Python reconstruction in the browser with Pyodide. Nothing leaves the machine.
 import { loadPyodide } from 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs';
 
-const MODULES = ['__init__.py', 'scene.py', 'easing.py', 'reconstruct.py', 'strokes.py', 'export.py', 'web_api.py'];
+const MODULES = ['__init__.py', 'scene.py', 'easing.py', 'gradients.py', 'reconstruct.py', 'strokes.py', 'export.py', 'web_api.py'];
 let pyodide;
 
 async function init() {

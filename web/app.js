@@ -22,7 +22,7 @@ const state = {
 
 // Worker --------------------------------------------------------------------------------
 // Bump on each release so browsers fetch the new worker and Python files instead of cached ones.
-const VERSION = '0.3.1';
+const VERSION = '0.4.0';
 const worker = new Worker(`worker.js?v=${VERSION}`, { type: 'module' });
 let workerReady = false;
 let pending = null;
@@ -187,6 +187,17 @@ function objectPath(o, p) {
   return path;
 }
 
+// A linear gradient lives in the object's local frame: map its two end points like the outline.
+function gradientFill(o, p) {
+  const S = scale(), c = Math.cos(p.r * Math.PI / 180), sn = Math.sin(p.r * Math.PI / 180);
+  const at = ([px, py]) => [((px * c - py * sn) * p.s + p.x) * S, ((px * sn + py * c) * p.s + p.y) * S];
+  const [x0, y0] = at(o.gradient.p0), [x1, y1] = at(o.gradient.p1);
+  const g = uctx.createLinearGradient(x0, y0, x1, y1);
+  g.addColorStop(0, o.gradient.colors[0]); g.addColorStop(1, o.gradient.colors[1]);
+  return g;
+}
+const swatchFill = (o) => o.gradient ? `linear-gradient(135deg, ${o.gradient.colors[0]}, ${o.gradient.colors[1]})` : o.color;
+
 // Drawing ---------------------------------------------------------------------------------
 function draw() {
   const sc = state.scene; if (!sc) return;
@@ -207,7 +218,7 @@ function draw() {
     if (o.kind === 'stroke') { drawStroke(o, f, uctx); continue; }
     const p = params(o, f);
     if (!p) continue;
-    uctx.fillStyle = o.color;
+    uctx.fillStyle = o.gradient ? gradientFill(o, p) : o.color;
     uctx.fill(objectPath(o, p), 'evenodd');
   }
   const sel = sc.objects.find(o => o.id === state.selected);
@@ -256,7 +267,7 @@ function renderList() {
     const b = document.createElement('button');
     b.className = 'obj' + (o.hidden ? ' is-hidden' : '');
     b.setAttribute('aria-pressed', String(o.id === state.selected));
-    const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = o.color;
+    const sw = document.createElement('span'); sw.className = 'swatch'; sw.style.background = swatchFill(o);
     const name = document.createElement('span'); name.textContent = `${o.kind === 'stroke' ? 'Stroke' : 'Object'} ${o.id + 1}`;
     const meta = document.createElement('span'); meta.className = 'mono';
     meta.textContent = `${keyCount(o)} keys`;
@@ -271,7 +282,10 @@ function renderInspector() {
   $('inspector').hidden = !o;
   renderTimeline();
   if (!o) return;
-  $('color').value = o.color;
+  $('color').value = o.gradient ? o.gradient.colors[0] : o.color;
+  $('color-label').textContent = o.gradient ? 'Start colour' : 'Colour';
+  $('color2-field').hidden = !o.gradient;
+  if (o.gradient) $('color2').value = o.gradient.colors[1];
   $('toggle-visible').textContent = o.hidden ? 'Show' : 'Hide';
   $('width-field').hidden = o.kind !== 'stroke';
   $('hint').textContent = o.kind === 'stroke'
@@ -283,7 +297,8 @@ function renderInspector() {
     ? [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['path', o.closed ? 'closed loop' : 'open'],
        ['caps', o.cap], ['start keys', o.start.length], [o.closed ? 'length keys' : 'end keys', (o.closed ? o.len : o.end).length], ['colour', o.color]]
     : [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['position keys', positionFrames(o).length],
-       ['rotation keys', o.rot.length], ['scale keys', o.scale.length], ['colour', o.color]];
+       ['rotation keys', o.rot.length], ['scale keys', o.scale.length],
+       ...(o.gradient ? [['fill', 'gradient']] : [['colour', o.color]])];
   $('facts').replaceChildren();
   for (const [k, v] of facts) {
     const dt = document.createElement('dt'); dt.textContent = k;
@@ -310,7 +325,14 @@ function undo() {
 
 $('color').addEventListener('pointerdown', () => remember());
 $('color').addEventListener('keydown', () => remember(), { once: false });
-$('color').oninput = (e) => { const o = selectedObject(); if (o) { o.color = e.target.value; renderList(); draw(); } };
+$('color').oninput = (e) => {
+  const o = selectedObject(); if (!o) return;
+  if (o.gradient) o.gradient.colors[0] = e.target.value; else o.color = e.target.value;
+  renderList(); draw();
+};
+$('color2').addEventListener('pointerdown', () => remember());
+$('color2').addEventListener('keydown', () => remember());
+$('color2').oninput = (e) => { const o = selectedObject(); if (o?.gradient) { o.gradient.colors[1] = e.target.value; renderList(); draw(); } };
 $('color').onchange = () => renderInspector();
 $('width').addEventListener('pointerdown', () => remember());
 $('width').oninput = (e) => { const o = selectedObject(); if (o && o.kind === 'stroke') { o.width = +e.target.value; $('width-out').textContent = o.width.toFixed(1); draw(); } };

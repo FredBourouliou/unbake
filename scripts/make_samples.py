@@ -72,3 +72,16 @@ save("loader", [
           cap="round", trim=np.c_[np.zeros(N), draw_on]),
 ], (250, 248, 244))
 print("loader sample written")
+
+# 5. Gradients: a gradient disc rolls across, a gradient square turns, a flat triangle pulses.
+roll = 40 + 176 * (0.5 - 0.5 * np.cos(math.pi * t))
+d = np.array([1.0, 0.0])
+save("gradients", [
+    Shape("square", (0, 0, 0), *outline("square", 30), track(np.full(N, 170.0), np.full(N, 92.0), rot=90 * t),
+          gradient=(np.array([0.0, -30.0]), np.array([0.0, 30.0]), (243, 156, 18), (231, 76, 60))),
+    Shape("triangle", (39, 174, 96), *outline("triangle", 22), track(np.full(N, 76.0), np.full(N, 84.0),
+                                                                    scale=1 + 0.2 * np.sin(t * math.pi * 4))),
+    Shape("circle", (0, 0, 0), *outline("circle", 26), track(roll, np.full(N, 192.0), rot=(roll - 40) / 26 * 180 / math.pi),
+          gradient=(-26 * d, 26 * d, (46, 134, 222), (142, 68, 173))),
+], (250, 248, 244))
+print("gradients sample written")

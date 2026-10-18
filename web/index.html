@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Schibsted+Grotesk:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap">
-  <link rel="stylesheet" href="styles.css?v=0.3.1">
+  <link rel="stylesheet" href="styles.css?v=0.4.0">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23221f1c'/%3E%3Ccircle cx='12' cy='16' r='6' fill='%23e8573a'/%3E%3Crect x='17' y='9' width='9' height='14' rx='1' fill='%23efe9e1'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -35,6 +35,7 @@
           <button class="sample" data-src="samples/orbit.gif" role="listitem"><img src="samples/orbit.gif" alt="Sample: a square orbiting, a triangle crossing"></button>
           <button class="sample" data-src="samples/loader.gif" role="listitem"><img src="samples/loader.gif" alt="Sample: a spinning loader, a wave and a check mark drawing themselves"></button>
           <button class="sample" data-src="samples/assemble.gif" role="listitem"><img src="samples/assemble.gif" alt="Sample: three shapes assembling into a logo"></button>
+          <button class="sample" data-src="samples/gradients.gif" role="listitem"><img src="samples/gradients.gif" alt="Sample: a gradient disc rolling, a gradient square turning, a triangle pulsing"></button>
         </div>
         <p class="drop__note">Runs on your machine: Python and OpenCV compiled to WebAssembly. Nothing is uploaded.</p>
       </div>
@@ -73,8 +74,12 @@
       <section class="side__block" id="inspector" hidden>
         <h2>Selected</h2>
         <label class="field">
-          <span>Colour</span>
+          <span id="color-label">Colour</span>
           <input type="color" id="color">
+        </label>
+        <label class="field" id="color2-field" hidden>
+          <span>End colour</span>
+          <input type="color" id="color2">
         </label>
         <label class="field" id="width-field" hidden>
           <span>Width <output id="width-out" class="mono"></output></span>
@@ -113,6 +118,6 @@
     <p>On synthetic animations with known sources (3–5 overlapping shapes, dithered GIFs), objects keep their identity on 95–99 % of frames, within 0.15 px and 0.5° (median); animated strokes are recovered 97 % of the time. On 24 real community animations, 18 come back faithful. Gradients, morphing shapes and near-identical colours are still out of reach. <a href="https://github.com/FredBourouliou/unbake#how-it-was-built-and-measured">Method and numbers</a>.</p>
   </section>
 
-  <script src="app.js?v=0.3.1" type="module"></script>
+  <script src="app.js?v=0.4.0" type="module"></script>
 </body>
 </html>

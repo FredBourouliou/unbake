@@ -137,6 +137,27 @@ def _anim(frames: list[int], values: list) -> dict:
     return {"a": 1, "k": k}
 
 
+def _lottie_fill(s: Shape) -> dict:
+    """Flat or linear-gradient fill; even-odd, so holes stay empty. Gradient points are local."""
+    if s.gradient is None:
+        return {"ty": "fl", "c": {"a": 0, "k": [c / 255 for c in s.color] + [1]}, "o": {"a": 0, "k": 100}, "r": 2}
+    p0, p1, c0, c1 = s.gradient
+    return {"ty": "gf", "o": {"a": 0, "k": 100}, "r": 2, "t": 1,
+            "s": {"a": 0, "k": [round(float(v), 3) for v in p0]}, "e": {"a": 0, "k": [round(float(v), 3) for v in p1]},
+            "g": {"p": 2, "k": {"a": 0, "k": [0, *(c / 255 for c in c0), 1, *(c / 255 for c in c1)]}}}
+
+
+def _svg_fill(s: Shape, i: int) -> tuple[str, str]:
+    """(defs, fill attribute value). userSpaceOnUse: the gradient lives in the shape's local frame."""
+    if s.gradient is None:
+        return "", f"rgb{tuple(s.color)}"
+    (x1, y1), (x2, y2), c0, c1 = s.gradient
+    defs = (f'<defs><linearGradient id="g{i}" gradientUnits="userSpaceOnUse" x1="{x1:.2f}" y1="{y1:.2f}" '
+            f'x2="{x2:.2f}" y2="{y2:.2f}"><stop offset="0" stop-color="rgb{tuple(c0)}"/>'
+            f'<stop offset="1" stop-color="rgb{tuple(c1)}"/></linearGradient></defs>')
+    return defs, f"url(#g{i})"
+
+
 def _to_lottie_linear(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
                       background: tuple[int, int, int]) -> dict:
     w, h = size
@@ -152,8 +173,7 @@ def _to_lottie_linear(shapes: list[Shape], size: tuple[int, int], fps: int, n_fr
         pos_frames = sorted(set(keys["x"]) | set(keys["y"]))
         items = [_path(s.outer)]
         items += [_path(h) for h in holes(s)]
-        items.append({"ty": "fl", "c": {"a": 0, "k": [c / 255 for c in s.color] + [1]},
-                      "o": {"a": 0, "k": 100}, "r": 2})  # even-odd: the hole stays empty
+        items.append(_lottie_fill(s))
         items.append({"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]},
                       "s": {"a": 0, "k": [100, 100]}, "r": {"a": 0, "k": 0}, "o": {"a": 0, "k": 100}})
         layers.append({
@@ -220,8 +240,9 @@ def _to_svg_linear(shapes: list[Shape], size: tuple[int, int], fps: int, n_frame
             vis = (f'<animate attributeName="visibility" dur="{dur:.3f}s" repeatCount="indefinite" calcMode="discrete" '
                    f'keyTimes="0;{a:.4f};{b:.4f}" values="hidden;visible;hidden"/>')
         transform_attr = "" if animations else f' transform="{static}"'
-        out.append(f'<g{transform_attr}>{animations}{vis}'
-                   f'<path d="{d}" fill="rgb{tuple(s.color)}" fill-rule="evenodd"/></g>')
+        defs, fill = _svg_fill(s, len(out))
+        out.append(f'<g{transform_attr}>{defs}{animations}{vis}'
+                   f'<path d="{d}" fill="{fill}" fill-rule="evenodd"/></g>')
     out.append("</svg>")
     return "\n".join(out)
 
@@ -399,7 +420,8 @@ def to_svg(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
                  + _smil("rotate", ch["rot"], n_frames, dur, lambda v: f"{v:.2f}", const=True)
                  + _smil("scale", ch["scale"], n_frames, dur, lambda v: f"{v:.4f}", const=True))
         d = " ".join([_d(s.outer)] + [_d(hp) for hp in holes(s)])
-        out.append(f'<g>{anims}{vis}<path d="{d}" fill="rgb{tuple(s.color)}" fill-rule="evenodd"/></g>')
+        defs, fill = _svg_fill(s, len(out))
+        out.append(f'<g>{defs}{anims}{vis}<path d="{d}" fill="{fill}" fill-rule="evenodd"/></g>')
     out.append("</svg>")
     return "\n".join(out)
 

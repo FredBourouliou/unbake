@@ -44,12 +44,15 @@ def load_frames(path: str) -> np.ndarray:
 
 # 1. palette --------------------------------------------------------------------------
 
-def find_palette(frames: np.ndarray, merge: float = 34.0, min_share: float = 0.0003):
+def find_palette(frames: np.ndarray, merge: float = 34.0, min_share: float = 0.0003, exclude: np.ndarray | None = None):
+    """Background and flat colours; pixels in `exclude` (gradient fills) are left out."""
     border = np.concatenate([frames[0, 0], frames[0, -1], frames[0, :, 0], frames[0, :, -1]])
     vals, counts = np.unique(border, axis=0, return_counts=True)
     background = vals[counts.argmax()].astype(float)
 
-    sample = frames[:: max(1, len(frames) // 12)].reshape(-1, 3).astype(float)
+    step = max(1, len(frames) // 12)
+    sample = frames[::step] if exclude is None else frames[::step][~exclude[::step]]
+    sample = sample.reshape(-1, 3).astype(float)
     bins = (sample // 8).astype(int)
     keys, inv, counts = np.unique(bins, axis=0, return_inverse=True, return_counts=True)
     order = np.argsort(-counts)
@@ -88,7 +91,7 @@ def find_palette(frames: np.ndarray, merge: float = 34.0, min_share: float = 0.0
                     blend = True
         if not blend:
             keep.append(c)
-    return background, np.array(keep)
+    return background, np.array(keep).reshape(-1, 3)
 
 
 def label_frames(frames: np.ndarray, background: np.ndarray, colours: np.ndarray) -> np.ndarray:
@@ -258,6 +261,7 @@ class FittedObject:
     ref_frame: int
     points: np.ndarray            # template pixel centres, relative to the reference centroid
     params: dict[int, np.ndarray]  # frame -> (x, y, rot_deg, scale)
+    gradient: tuple | None = None  # (p0, p1, colour0, colour1) in the local frame
 
 
 def _score(points, p, labels_t, k):
@@ -398,7 +402,7 @@ def to_shapes(objects: list[FittedObject], labels: np.ndarray, n_frames: int) ->
         span = np.arange(frames[0], frames[-1] + 1)
         for i in range(4):
             full[span, i] = np.interp(span, frames, track[:, i])
-        shapes.append(Shape("polygon", obj.colour, outer, hole, full))
+        shapes.append(Shape("polygon", obj.colour, outer, hole, full, gradient=obj.gradient))
     return _z_order(shapes, objects, labels)
 
 
@@ -425,6 +429,7 @@ def _z_order(shapes, objects, labels):
                 wins[i] += a > b
                 wins[j] += b > a
     return [shapes[i] for i in np.argsort(wins, kind="stable")]
+
 
 
 ANALYSIS_SIZE = 320  # thresholds are tuned in pixels at this scale
@@ -454,6 +459,9 @@ def _upscale(shapes: list[Shape], factor: float) -> list[Shape]:
         s.track[:, :2] *= k
         if s.kind == "stroke":
             s.width *= k
+        if s.gradient is not None:
+            p0, p1, c0, c1 = s.gradient
+            s.gradient = (p0 * k, p1 * k, c0, c1)
     return shapes
 
 
@@ -461,14 +469,26 @@ def reconstruct(path: str) -> dict:
     """Reconstruct a GIF. Shapes are in the input's pixel coordinates; `labels` are at analysis scale."""
     frames = load_frames(path)
     small, factor = _downscale(frames)
-    background, colours = find_palette(small)
+    from .gradients import detect_gradients, fit_gradient
+    background, _ = find_palette(small)
+    groups, group_colours, soft = detect_gradients(small, background)
+    in_gradient = np.stack([cv2.dilate((g > 0).astype(np.uint8), np.ones((5, 5), np.uint8)) > 0 for g in groups])
+    background, colours = find_palette(small, exclude=in_gradient if group_colours.size else None)
     labels = label_frames(small, background, colours)
+    n_flat = len(colours)
+    if group_colours.size:
+        # Each gradient group is one more "colour" for the tracker.
+        labels[groups > 0] = n_flat + groups[groups > 0]
+        colours = np.vstack([colours.reshape(-1, 3), group_colours])
     from .strokes import detect_strokes
     strokes, consumed = detect_strokes(labels, colours)
     rigid_labels = labels.copy()
     rigid_labels[consumed] = 0
     tracks = track_objects(rigid_labels)
     objects = [fit_track(tr, rigid_labels, colours) for tr in tracks]
+    for tr, obj in zip(tracks, objects):
+        if obj.colour_index > n_flat:
+            obj.gradient = fit_gradient(obj, tr.frames, soft, _round(obj.points))
     shapes = _upscale(to_shapes(objects, rigid_labels, len(frames)) + strokes, factor)
     return {"frames": frames, "background": tuple(int(c) for c in background), "colours": colours,
             "labels": labels, "objects": objects, "shapes": shapes, "analysis_scale": factor}
