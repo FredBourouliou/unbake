@@ -1,0 +1,38 @@
+name: A GIF Unbake gets wrong
+description: Share an animation that comes back wrong, so it can be fixed.
+labels: ["reconstruction"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks! Failing GIFs are the most useful feedback right now.
+        Currently supported: flat 2D motion graphics on a plain background (rigid shapes, self-drawing strokes).
+        Known gaps: gradients, morphing shapes, merging particles, near-identical colours. Those are welcome too.
+  - type: textarea
+    id: gif
+    attributes:
+      label: The GIF
+      description: Drag the GIF into this box, or paste a link to it.
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What went wrong
+      description: What you expected, and what came out. A screenshot of the editor helps.
+    validations:
+      required: true
+  - type: input
+    id: origin
+    attributes:
+      label: Where it comes from (optional)
+      placeholder: After Effects export, a Lottie file, a screen recording…
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where did you run it?
+      options:
+        - Web editor
+        - Python (`unbake` command or library)
+    validations:
+      required: true

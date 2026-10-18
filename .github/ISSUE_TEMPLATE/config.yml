@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and discussion
+    url: https://github.com/FredBourouliou/unbake/discussions
+    about: Ask a question or share what you made with Unbake.

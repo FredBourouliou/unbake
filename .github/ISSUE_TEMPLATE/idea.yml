@@ -1,0 +1,11 @@
+name: Idea or feature request
+description: Something Unbake should do.
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to do?
+      description: Describe the use case first; the implementation can come later.
+    validations:
+      required: true
