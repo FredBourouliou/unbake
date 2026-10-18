@@ -1,12 +1,21 @@
 [project]
 name = "unbake"
-version = "0.1.0"
-description = "Add your description here"
+version = "0.2.0"
+description = "Turn a flat motion-graphics GIF back into editable objects, motion paths and animated strokes; export Lottie or animated SVG."
 readme = "README.md"
 authors = [
-    { name = "Frederic Bourouliou", email = "183642313+FredBourouliou@users.noreply.github.com" }
+    { name = "Frédéric Bourouliou", email = "183642313+FredBourouliou@users.noreply.github.com" }
 ]
 requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["motion graphics", "lottie", "svg", "animation", "computer vision", "gif", "vectorization"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Graphics",
+    "Programming Language :: Python :: 3",
+]
 dependencies = [
     "numpy>=2.5.4",
     "opencv-python-headless>=5.0.0.93",
@@ -15,6 +24,19 @@ dependencies = [
     "scipy>=1.18.1",
 ]
 
+[project.scripts]
+unbake = "unbake.cli:main"
+
+[project.urls]
+Homepage = "https://fredbourouliou.github.io/unbake/"
+Source = "https://github.com/FredBourouliou/unbake"
+Issues = "https://github.com/FredBourouliou/unbake/issues"
+
 [build-system]
 requires = ["uv_build>=0.13.0,<0.14.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]

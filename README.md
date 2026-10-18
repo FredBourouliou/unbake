@@ -15,11 +15,11 @@
 ## Use it from Python
 
 ```bash
-uv sync
-uv run python scripts/unbake_cli.py animation.gif      # writes animation.json (Lottie) and animation.svg
+uv tool install git+https://github.com/FredBourouliou/unbake   # or: uv sync, then uv run unbake …
+unbake animation.gif                                          # writes animation.json (Lottie) and animation.svg
 ```
 
-Run the editor locally: `./scripts/build_web.sh && python3 -m http.server -d web 8000`.
+Run the editor locally: `./scripts/build_web.sh && python3 -m http.server -d web 8000`. Run the tests: `uv run pytest`.
 
 ## How it works
 
