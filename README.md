@@ -9,8 +9,8 @@
 ## What works, what doesn't (yet)
 
 - **Works:** flat 2D motion graphics on a plain background. Rigid shapes that move, rotate and scale (with occlusions and dithered GIFs), and constant-width strokes that draw on, draw off or spin like a loader.
-- **Also:** two-colour linear gradient fills that move and turn with their shape (v0.4).
-- **Doesn't yet:** radial or multi-stop gradients, shapes that morph, particles that merge, near-identical colours, photos or 3D.
+- **Also:** two-colour linear gradient fills that move and turn with their shape (v0.4), and shapes whose outline morphs (v0.5, animated paths; mild morphs are still often taken for rigid shapes).
+- **Doesn't yet:** radial or multi-stop gradients, morphing shapes with holes, particles that merge, near-identical colours, photos or 3D.
 - On 24 real community animations (loaders, toggles, icons, logos), 18 come back faithful, 3 partial, 3 wrong. Details and every number below.
 
 ## Use it from Python
@@ -161,6 +161,25 @@ A new corpus level, **morph**: 1–3 shapes, at least one whose outline morphs b
 | Lottie export rendered by lottie-web vs the reconstruction's own render, foreground | ≤ 4 / 255 |
 
 Non-regression: medium samples given a morph by mistake ≤ 5 %, and the four v0.1 thresholds on medium still hold. Measured on dev while developing, then once on a fresh holdout (seeds 60 000+: 60 morph, 100 medium).
+
+How it works: an object is a morph when no rigid pose of its outline explains it on the frames where it is seen whole (not touching another colour or the border): the mean distance between the best-placed rigid outline and the true edge, (1 − IoU) × area / perimeter, exceeds 1.2 px at the 90th percentile. Its outline is then traced on each of those frames, resampled by arc length, aligned frame to frame by cyclic shift, interpolated in time over the frames where it is partly hidden, and lightly smoothed. Exports keep an outline key only where blending linearly between keys would drift by more than 0.6 px.
+
+Two things found on the dev set before the holdout. Measured on 20 medium samples, false morphs looked absent; on 300 they were 6.7 %, mostly rigid shapes whose template had been taken on a view partly hidden by another object (the bite then misfits every whole view). Templates now prefer a view seen whole, which also helps plain rigid reconstruction; with the pose refined before deciding, false morphs fell to 1/300.
+
+**Result on the fresh holdout (run once, commit `7a2b463`): not met on one criterion.**
+
+| Metric | Result | |
+|---|---|---|
+| Morphing shapes recovered with an animated outline | **87.1 %** of 85 | ✗ (≥ 90 %) |
+| Mean per-frame IoU of each morphing shape | 0.918 | ✓ |
+| Identity | 97.3 % | ✓ |
+| Lottie export (lottie-web) vs own render | 2.36 / 255 | ✓ |
+| Medium samples given a false morph | 0/100 | ✓ |
+| v0.1 thresholds on medium | 97.4 %, 0.14 px, 0.42°, IoU 0.932 | ✓ |
+
+The 11 missed morphs, looked at after the run: most are mild ones (square ↔ circle, rect ↔ circle, star ↔ rect over a short range) that the best rigid pose, scale included, still explains to within about 1 px, so they stay rigid; their per-frame IoU stays high, which is why the IoU criterion passes. One is never seen whole on any frame. Lowering the 1.2 px threshold would catch more of them but brings back false morphs on rigid shapes; that trade-off is the next thing to work on, on dev, then on a fresh holdout.
+
+Real animations after v0.4 and v0.5, against v0.3: mean region IoU 0.799 → 0.799, nine above 0.9 instead of eight. *trail_loading* goes from 0.63 to 0.92 (its merging trail comes back as a morphing blob), *bouncing_ball* from 0.75 to 0.83; *turbine* drops to 0.51 for the metric reason given in v0.4, and *medal* (already wrong) loses two small pieces.
 
 ### Results (holdout, run once, commit `e34f877`)
 
