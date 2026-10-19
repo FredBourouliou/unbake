@@ -13,7 +13,7 @@ def corpus(tmp_path_factory):
     """A few small corpus samples written to disk once per test session."""
     root = tmp_path_factory.mktemp("corpus")
     paths = {}
-    for level, seed in [("easy", 1), ("medium", 2), ("strokes", 3), ("gradients", 4)]:
+    for level, seed in [("easy", 1), ("medium", 2), ("strokes", 3), ("gradients", 4), ("morph", 5)]:
         gif = save_sample(make_sample(level, seed), root)
         paths[level] = (gif, json.loads(gif.with_suffix(".json").read_text()))
     return paths

@@ -85,3 +85,16 @@ save("gradients", [
           gradient=(-26 * d, 26 * d, (46, 134, 222), (142, 68, 173))),
 ], (250, 248, 244))
 print("gradients sample written")
+
+# 6. Morph: a blob turns into a star and back while it drifts, a square rounds into a circle.
+from unbake.corpus import radial_outline  # noqa: E402
+blend = (0.5 - 0.5 * np.cos(2 * math.pi * t))[:, None, None]
+star = radial_outline("circle", 30) * (1 - blend) + radial_outline("star", 34) * blend
+grow = np.clip(t * 1.6, 0, 1)[:, None, None]
+grow = 0.5 - 0.5 * np.cos(math.pi * grow)
+rounded = radial_outline("square", 26) * (1 - grow) + radial_outline("circle", 28) * grow
+save("morph", [
+    Shape("polygon", (142, 68, 173), star[0], None, track(70 + 60 * t, 90 + 30 * np.sin(2 * math.pi * t)), morph=star),
+    Shape("polygon", (243, 156, 18), rounded[0], None, track(np.full(N, 180.0), np.full(N, 180.0)), morph=rounded),
+], (250, 248, 244))
+print("morph sample written")

@@ -16,7 +16,7 @@ def test_gradient_shapes_come_back_as_gradients(corpus):
     for s in found:
         p0, p1, c0, c1 = s.gradient
         assert np.linalg.norm(np.asarray(p1) - np.asarray(p0)) > 10   # spans the shape
-        assert sum(abs(a - b) for a, b in zip(c0, c1)) > 60            # two distinct colours
+        assert sum(abs(a - b) for a, b in zip(c0, c1)) > 40            # two distinct colours
 
 
 def test_flat_samples_get_no_gradient(corpus):

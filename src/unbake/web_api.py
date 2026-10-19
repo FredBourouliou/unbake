@@ -15,7 +15,7 @@ import tempfile
 import numpy as np
 
 from .easing import sample_channel
-from .export import eased_channels, to_lottie, to_svg
+from .export import eased_channels, morph_keys, to_lottie, to_svg
 from .reconstruct import reconstruct
 from .scene import Shape, holes
 
@@ -45,6 +45,9 @@ def reconstruct_gif(data: bytes) -> dict:
                 p0, p1, c0, c1 = s.gradient
                 base["gradient"] = {"p0": np.round(p0, 2).tolist(), "p1": np.round(p1, 2).tolist(),
                                     "colors": ["#%02x%02x%02x" % tuple(c0), "#%02x%02x%02x" % tuple(c1)]}
+            if s.morph is not None:
+                # Outline keys: [frame, points]; the editor blends them linearly, like the exports.
+                base["morph"] = [[f, np.round(s.morph[f], 2).tolist()] for f in morph_keys(s)]
             base.update({"outer": np.round(s.outer, 2).tolist(), "holes": [np.round(hp, 2).tolist() for hp in holes(s)],
                          "x": _keys_json(ch["x"], 2), "y": _keys_json(ch["y"], 2),
                          "rot": _keys_json(ch["rot"], 2), "scale": _keys_json(ch["scale"], 4)})
@@ -93,8 +96,20 @@ def scene_to_shapes(scene: dict) -> list[Shape]:
         g = o.get("gradient")
         gradient = None if g is None else (np.array(g["p0"], float), np.array(g["p1"], float),
                                            _hex(g["colors"][0]), _hex(g["colors"][1]))
+        morph = None
+        if o.get("morph"):
+            kf = np.array([k[0] for k in o["morph"]], float)
+            kp = np.array([k[1] for k in o["morph"]], float)
+            morph = np.full((n, len(kp[0]), 2), np.nan)
+            for t in range(span[0], span[1] + 1):
+                j = int(np.clip(np.searchsorted(kf, t, side="right") - 1, 0, len(kf) - 1))
+                if j == len(kf) - 1 or t <= kf[0]:
+                    morph[t] = kp[0] if t <= kf[0] else kp[-1]
+                else:
+                    w = (t - kf[j]) / (kf[j + 1] - kf[j])
+                    morph[t] = kp[j] * (1 - w) + kp[j + 1] * w
         shapes.append(Shape("polygon", _hex(o["color"]), np.array(o["outer"], float), hole_list or None, track,
-                            gradient=gradient))
+                            gradient=gradient, morph=morph))
     return shapes
 
 

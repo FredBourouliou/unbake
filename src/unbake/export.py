@@ -78,6 +78,9 @@ def keyframe_count(shapes: list[Shape], easing: bool = True) -> tuple[int, int]:
             visible, chans = eased_channels(s)
             kept += sum(len(k) for k in chans.values())
             total += len(chans) * len(visible)
+            if s.morph is not None:
+                kept += len(morph_keys(s))
+                total += len(visible)
         return kept, total
     kept = total = 0
     for s in shapes:
@@ -93,6 +96,45 @@ def keyframe_count(shapes: list[Shape], easing: bool = True) -> tuple[int, int]:
 
 
 # Lottie ---------------------------------------------------------------------------------
+
+MORPH_TOLERANCE = 0.6  # px: an outline key is added where linear blending drifts further
+
+
+def morph_keys(shape: Shape) -> list[int]:
+    """Frames where a morphing outline needs a key: RDP over time, outlines blended linearly."""
+    visible = np.flatnonzero(~np.isnan(shape.track[:, 0]))
+    M = shape.morph[visible]
+
+    def split(a: int, b: int) -> list[int]:
+        if b - a < 2:
+            return []
+        w = (np.arange(a + 1, b) - a)[:, None, None] / (b - a)
+        err = np.linalg.norm(M[a + 1:b] - (M[a] * (1 - w) + M[b] * w), axis=-1).max(axis=1)
+        i = int(np.argmax(err))
+        if err[i] <= MORPH_TOLERANCE:
+            return []
+        m = a + 1 + i
+        return split(a, m) + [m] + split(m, b)
+
+    idx = [0] + split(0, len(visible) - 1) + [len(visible) - 1]
+    return [int(visible[i]) for i in sorted(set(idx))]
+
+
+def _shape_value(points: np.ndarray) -> dict:
+    pts = [[round(float(x), 3), round(float(y), 3)] for x, y in points]
+    zeros = [[0, 0]] * len(pts)
+    return {"c": True, "v": pts, "i": zeros, "o": zeros}
+
+
+def _morph_path(s: Shape) -> dict:
+    """Animated Lottie path, linear between outline keys."""
+    keys = morph_keys(s)
+    if len(keys) == 1:
+        return {"ty": "sh", "ks": {"a": 0, "k": _shape_value(s.morph[keys[0]])}}
+    k = [{"t": f, "s": [_shape_value(s.morph[f])], "i": {"x": 1, "y": 1}, "o": {"x": 0, "y": 0}} for f in keys[:-1]]
+    k.append({"t": keys[-1], "s": [_shape_value(s.morph[keys[-1]])]})
+    return {"ty": "sh", "ks": {"a": 1, "k": k}}
+
 
 def _path(points: np.ndarray, closed: bool = True) -> dict:
     pts = [[round(float(x), 3), round(float(y), 3)] for x, y in points]
@@ -171,7 +213,7 @@ def _to_lottie_linear(shapes: list[Shape], size: tuple[int, int], fps: int, n_fr
         rot = np.full(len(tr), np.nan)
         rot[visible] = np.unwrap(np.deg2rad(tr[visible, 2])) * 180 / math.pi
         pos_frames = sorted(set(keys["x"]) | set(keys["y"]))
-        items = [_path(s.outer)]
+        items = [_morph_path(s) if s.morph is not None else _path(s.outer)]
         items += [_path(h) for h in holes(s)]
         items.append(_lottie_fill(s))
         items.append({"ty": "tr", "p": {"a": 0, "k": [0, 0]}, "a": {"a": 0, "k": [0, 0]},
@@ -421,7 +463,19 @@ def to_svg(shapes: list[Shape], size: tuple[int, int], fps: int, n_frames: int,
                  + _smil("scale", ch["scale"], n_frames, dur, lambda v: f"{v:.4f}", const=True))
         d = " ".join([_d(s.outer)] + [_d(hp) for hp in holes(s)])
         defs, fill = _svg_fill(s, len(out))
-        out.append(f'<g>{defs}{anims}{vis}<path d="{d}" fill="{fill}" fill-rule="evenodd"/></g>')
+        morph = ""
+        if s.morph is not None:
+            keys = morph_keys(s)
+            d = _d(s.morph[keys[0]])
+            if len(keys) > 1:
+                times = [f / n_frames for f in keys]
+                vals = [_d(s.morph[f]) for f in keys]
+                if times[0] > 0:
+                    times, vals = [0.0] + times, [vals[0]] + vals
+                times, vals = times + [1.0], vals + [vals[-1]]
+                morph = (f'<animate attributeName="d" dur="{dur:.3f}s" repeatCount="indefinite" calcMode="linear" '
+                         f'keyTimes="{";".join(f"{x:.4f}" for x in times)}" values="{";".join(vals)}"/>')
+        out.append(f'<g>{defs}{anims}{vis}<path d="{d}" fill="{fill}" fill-rule="evenodd">{morph}</path></g>')
     out.append("</svg>")
     return "\n".join(out)
 

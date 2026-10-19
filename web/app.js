@@ -22,7 +22,7 @@ const state = {
 
 // Worker --------------------------------------------------------------------------------
 // Bump on each release so browsers fetch the new worker and Python files instead of cached ones.
-const VERSION = '0.4.0';
+const VERSION = '0.5.0';
 const worker = new Worker(`worker.js?v=${VERSION}`, { type: 'module' });
 let workerReady = false;
 let pending = null;
@@ -122,7 +122,25 @@ function ensureKey(keys, f) {
 }
 const keyCount = (o) => o.kind === 'stroke'
   ? o.start.length + (o.closed ? o.len.length : o.end.length)
-  : o.x.length + o.y.length + o.rot.length + o.scale.length;
+  : o.x.length + o.y.length + o.rot.length + o.scale.length + (o.morph ? o.morph.length : 0);
+
+// Morphing outline: keys [frame, points], blended linearly (as in the exports).
+function morphAt(o, f) {
+  const keys = o.morph;
+  if (keys.length === 1 || f <= keys[0][0]) return keys[0][1];
+  if (f >= keys[keys.length - 1][0]) return keys[keys.length - 1][1];
+  let i = 1; while (keys[i][0] < f) i++;
+  const [fa, pa] = keys[i - 1], [fb, pb] = keys[i], w = (f - fa) / (fb - fa);
+  return pa.map(([x, y], j) => [x + (pb[j][0] - x) * w, y + (pb[j][1] - y) * w]);
+}
+function ensureMorphKey(keys, f) {
+  const at = keys.findIndex(k => k[0] === f);
+  if (at >= 0) return at;
+  const pts = morphAt({ morph: keys }, f);
+  const i = keys.findIndex(k => k[0] > f);
+  keys.splice(i < 0 ? keys.length : i, 0, [f, pts, null]);
+  return keys.findIndex(k => k[0] === f);
+}
 const positionFrames = (o) => [...new Set([...o.x.map(k => k[0]), ...o.y.map(k => k[0])])].sort((a, b) => a - b);
 
 function trimAt(o, f) {
@@ -171,13 +189,13 @@ function params(o, f) {
   if (o.hidden || f < o.span[0] || f > o.span[1]) return null;
   const x = sampleKeys(o.x, f), y = sampleKeys(o.y, f);
   const r = sampleKeys(o.rot, f), s = sampleKeys(o.scale, f);
-  return { x, y, r, s };
+  return { x, y, r, s, outline: o.morph ? morphAt(o, f) : o.outer };
 }
 
 function objectPath(o, p) {
   const S = scale(), c = Math.cos(p.r * Math.PI / 180), sn = Math.sin(p.r * Math.PI / 180);
   const path = new Path2D();
-  for (const ring of [o.outer, ...(o.holes || [])]) {
+  for (const ring of [p.outline || o.outer, ...(o.holes || [])]) {
     ring.forEach(([px, py], i) => {
       const X = (px * c - py * sn) * p.s + p.x, Y = (px * sn + py * c) * p.s + p.y;
       i ? path.lineTo(X * S, Y * S) : path.moveTo(X * S, Y * S);
@@ -297,7 +315,7 @@ function renderInspector() {
     ? [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['path', o.closed ? 'closed loop' : 'open'],
        ['caps', o.cap], ['start keys', o.start.length], [o.closed ? 'length keys' : 'end keys', (o.closed ? o.len : o.end).length], ['colour', o.color]]
     : [['frames', `${o.span[0] + 1}–${o.span[1] + 1}`], ['position keys', positionFrames(o).length],
-       ['rotation keys', o.rot.length], ['scale keys', o.scale.length],
+       ['rotation keys', o.rot.length], ['scale keys', o.scale.length], ...(o.morph ? [['outline keys', o.morph.length]] : []),
        ...(o.gradient ? [['fill', 'gradient']] : [['colour', o.color]])];
   $('facts').replaceChildren();
   for (const [k, v] of facts) {
@@ -351,7 +369,8 @@ $('new').onclick = () => { stop(); state.scene = null; workspace.dataset.state =
 // Position joins the x and y channels: a key there moves both, as in After Effects.
 function timelineRows(o) {
   if (o.kind === 'stroke') return [{ name: 'Start', chans: [o.start] }, { name: o.closed ? 'Length' : 'End', chans: [o.closed ? o.len : o.end] }];
-  return [{ name: 'Position', chans: [o.x, o.y] }, { name: 'Rotation', chans: [o.rot] }, { name: 'Scale', chans: [o.scale] }];
+  const rows = [{ name: 'Position', chans: [o.x, o.y] }, { name: 'Rotation', chans: [o.rot] }, { name: 'Scale', chans: [o.scale] }];
+  return o.morph ? [...rows, { name: 'Outline', chans: [o.morph], morph: true }] : rows;
 }
 const rowFrames = (row) => [...new Set(row.chans.flatMap(c => c.map(k => k[0])))].sort((a, b) => a - b);
 const at = (f) => String(state.scene.frames > 1 ? f / (state.scene.frames - 1) : 0);
@@ -448,7 +467,7 @@ function addKey(r, f) {
   stop();
   if (row.chans.every(c => c.some(k => k[0] === f))) { state.key = { row: r, frame: f }; state.frame = f; draw(); return; }
   remember();
-  for (const c of row.chans) ensureKey(c, f);
+  for (const c of row.chans) row.morph ? ensureMorphKey(c, f) : ensureKey(c, f);
   state.key = { row: r, frame: f }; state.frame = f;
   renderList(); renderInspector(); draw();
 }

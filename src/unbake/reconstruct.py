@@ -262,6 +262,7 @@ class FittedObject:
     points: np.ndarray            # template pixel centres, relative to the reference centroid
     params: dict[int, np.ndarray]  # frame -> (x, y, rot_deg, scale)
     gradient: tuple | None = None  # (p0, p1, colour0, colour1) in the local frame
+    morph: tuple | None = None     # (track, outlines): per-frame position and local outline
 
 
 def _score(points, p, labels_t, k):
@@ -284,7 +285,11 @@ def _score(points, p, labels_t, k):
 
 def fit_track(track: Track, labels: np.ndarray, colours: np.ndarray) -> FittedObject:
     k = track.colour
-    ref = max(track.frames, key=lambda t: track.frames[t].sum())
+    # The template is the largest view, preferring one seen whole: a view partly hidden by
+    # another object would give the template a bite.
+    biggest = max(m.sum() for m in track.frames.values())
+    whole = [t for t, m in track.frames.items() if m.sum() >= 0.7 * biggest and _whole_view(m, labels[t])]
+    ref = max(whole or track.frames, key=lambda t: track.frames[t].sum())
     ys, xs = np.nonzero(track.frames[ref])
     # Pixel centres in continuous coordinates (pixel i is centred on i + 0.5).
     ref_c = np.array([xs.mean(), ys.mean()]) + 0.5
@@ -313,6 +318,16 @@ def fit_track(track: Track, labels: np.ndarray, colours: np.ndarray) -> FittedOb
             params[t][2] = 0.0
     colour = tuple(int(c) for c in colours[k - 1])
     return FittedObject(k, colour, ref, points, params)
+
+
+def _whole_view(mask: np.ndarray, labels_t: np.ndarray) -> bool:
+    """True when the object touches neither another colour nor the image border."""
+    ys, xs = np.nonzero(mask)
+    h, w = mask.shape
+    if xs.min() == 0 or ys.min() == 0 or xs.max() == w - 1 or ys.max() == h - 1:
+        return False
+    ring = (cv2.dilate(mask.astype(np.uint8), np.ones((5, 5), np.uint8)) > 0) & ~mask
+    return np.count_nonzero(labels_t[ring] > 0) <= 0.02 * ring.sum()
 
 
 def _round(points: np.ndarray) -> bool:
@@ -395,6 +410,11 @@ def _grow(poly, d):
 def to_shapes(objects: list[FittedObject], labels: np.ndarray, n_frames: int) -> list[Shape]:
     shapes = []
     for obj in objects:
+        if obj.morph is not None:
+            track, outlines = obj.morph
+            shapes.append(Shape("polygon", obj.colour, outlines[obj.ref_frame].copy() if not np.isnan(outlines[obj.ref_frame, 0, 0])
+                                else outlines[np.flatnonzero(~np.isnan(outlines[:, 0, 0]))[0]].copy(), None, track, morph=outlines))
+            continue
         outer, hole = vectorise(obj)
         frames = sorted(obj.params)
         track = np.array([obj.params[t] for t in frames])
@@ -459,6 +479,8 @@ def _upscale(shapes: list[Shape], factor: float) -> list[Shape]:
         s.track[:, :2] *= k
         if s.kind == "stroke":
             s.width *= k
+        if s.morph is not None:
+            s.morph = s.morph * k
         if s.gradient is not None:
             p0, p1, c0, c1 = s.gradient
             s.gradient = (p0 * k, p1 * k, c0, c1)
@@ -489,6 +511,14 @@ def reconstruct(path: str) -> dict:
     for tr, obj in zip(tracks, objects):
         if obj.colour_index > n_flat:
             obj.gradient = fit_gradient(obj, tr.frames, soft, _round(obj.points))
+    from .morph import fit_morph, is_morph
+    for tr, obj in zip(tracks, objects):
+        outline = vectorise(obj)
+        # Animated outlines have no holes: a shape with holes stays rigid.
+        if obj.gradient is None and obj.colour_index <= n_flat and outline[1] is None:
+            morphing, clean = is_morph(obj, tr.frames, labels, outline)
+            if morphing:
+                obj.morph = fit_morph(obj, tr.frames, clean, len(frames))
     shapes = _upscale(to_shapes(objects, rigid_labels, len(frames)) + strokes, factor)
     return {"frames": frames, "background": tuple(int(c) for c in background), "colours": colours,
             "labels": labels, "objects": objects, "shapes": shapes, "analysis_scale": factor}
