@@ -1,0 +1,10 @@
+{
+  "samples": 40,
+  "gradients_recovered": 1.0,
+  "n_gradients": 81,
+  "identity": 0.9394036117445232,
+  "pos_median": 0.18519878148797736,
+  "colour_error": 6.242718226592977,
+  "lottie_error": 2.8957198510891415,
+  "medium_with_false_gradient": "0/20"
+}

@@ -4,14 +4,14 @@
 
 **[▶ Try it in your browser](https://fredbourouliou.github.io/unbake/)** — Python, OpenCV and SciPy run locally through WebAssembly; nothing is uploaded.
 
-![Demo: a GIF is unbaked into objects; the ball is selected, its whole motion path is dragged and it is recoloured](docs/demo.gif)
+![Demo: a GIF is unbaked into objects; the ball's motion path is dragged, a key is retimed on the timeline and the ball recoloured; then a gradient square gets a new end colour, and a blob morphs into a star](docs/demo.gif)
 
 ## What works, what doesn't (yet)
 
 - **Works:** flat 2D motion graphics on a plain background. Rigid shapes that move, rotate and scale (with occlusions and dithered GIFs), and constant-width strokes that draw on, draw off or spin like a loader.
 - **Also:** two-colour linear gradient fills that move and turn with their shape (v0.4), and shapes whose outline morphs (v0.5, animated paths; mild morphs are still often taken for rigid shapes).
 - **Doesn't yet:** radial or multi-stop gradients, morphing shapes with holes, particles that merge, near-identical colours, photos or 3D.
-- On 24 real community animations (loaders, toggles, icons, logos), 18 come back faithful, 3 partial, 3 wrong. Details and every number below.
+- On 24 real community animations (loaders, toggles, icons, logos), 13 come back faithful, 7 partial, 4 wrong (strict visual review, v0.5). Details and every number below.
 
 ## Use it from Python
 
@@ -220,6 +220,16 @@ Mean IoU 0.72 (it penalises thin strokes and small objects heavily: several "fai
 | Fails | 6 | 3 (clock hands, infinite_rainbow gradient stroke, trail_loading particles) |
 
 Biggest gains: material_loader 0.33 → 0.86, play_button 0.59 → 0.94, colorline 0.34 → 0.85. A branched outline icon (medal) is now explicitly left to the rigid model (a stroke must be one simple path covering ≥ 75 % of its skeleton).
+
+**Stricter re-review with v0.5 (19 October 2026).** Every contact sheet was looked at again, frame by frame, counting as faithful only an animation where every object, colour and change of shape comes back:
+
+| Visual verdict | v0.5 | Animations |
+|---|---|---|
+| Faithful | **13** | bell, bouncing_ball, check_pop, colorline, gears, loading_semicircle, location_pin, material_loader, play_button, socar_logo, trail_loading, turbine, x_pop |
+| Partial | 7 | cube_loader (two cubes merge on the last frames), emoji_wink (the wink stays an open eye), medal (the glow disc and the final pose are missed), pagination (pale dots come back as rings), preloader (dots of four colours come back in two), simple_loader (a pale dot is missing), toggle_switch (the in-between icon of the transition) |
+| Fails | 4 | clock (the hands are drawn into the face), infinite_rainbow (multi-colour gradient stroke), retweet (the icon changes from arrows to a check: only the check comes back), switch_loop (the grey track and knob are lost) |
+
+The eight animations that look worse than the v0.2 table were re-run with v0.3.0: their output is the same. So this is not a regression; the v0.2 review was too lenient (it accepted partly wrong frames as faithful). Since v0.2, trail_loading moved from fails to faithful (v0.5 morphs) and turbine's disc comes back as one gradient (v0.4).
 
 ### Comparison
 

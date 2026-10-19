@@ -1,0 +1,9 @@
+{
+  "samples": 40,
+  "morphs_recovered": 0.921875,
+  "n_morphs": 64,
+  "morph_iou": 0.9035506921948318,
+  "identity": 0.9532900703288597,
+  "lottie_error": 2.397100704651476,
+  "medium_with_false_morph": "0/20"
+}
