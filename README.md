@@ -33,6 +33,15 @@ Run the editor locally: `./scripts/build_web.sh && python3 -m http.server -d web
 
 Unbake started as a one-week feasibility spike with stop criteria written before the code, synthetic animations with known sources, and holdout sets used once. The log below is kept as it happened, failures included.
 
+### Built with Claude Code
+
+The code was written and the experiments run with [Claude Code](https://claude.com/claude-code), Anthropic's coding agent, working under my direction; commits say so in their `Co-Authored-By` line. I chose the problem, decided the scope of each version, and decided what got published and when to stop. What makes the results trustworthy is the method, not who typed the code, and every step of it can be checked in the git history:
+
+- each criterion was committed before the code it judges (for example `99ff24b` before the morph code in `7a2b463`);
+- each holdout set was generated from fresh seeds and run once, on a named commit, and is never reused;
+- results that miss a criterion are reported as misses (v0.2, v0.4, v0.5), with the reason measured afterwards;
+- the real-animation verdicts come from looking at every contact sheet, and were tightened when a re-review found the first ones too lenient.
+
 ### The question
 
 Can objects and their motion be reconstructed from rendered frames cleanly enough that editing them is useful?
